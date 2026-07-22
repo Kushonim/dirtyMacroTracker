@@ -12,9 +12,9 @@ function playClickSound() {
       sharedAudioCtx = new AudioCtx();
     }
     const ctx = sharedAudioCtx;
-    const duration = 0.09;
+    const duration = 0.13;
 
-    // Short burst of noise shaped by a bandpass filter = percussive "knock" instead of a tone/beep
+    // Short burst of noise, shaped into a soft "thud" rather than a harsh click
     const bufferSize = Math.floor(ctx.sampleRate * duration);
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -24,17 +24,26 @@ function playClickSound() {
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;
 
+    // Bandpass gives it a woody "body", low Q so it's a soft thump rather than a ringing tone
     const bandpass = ctx.createBiquadFilter();
     bandpass.type = "bandpass";
-    bandpass.frequency.value = 1100;
-    bandpass.Q.value = 3.5;
+    bandpass.frequency.value = 550;
+    bandpass.Q.value = 1.2;
+
+    // Lowpass removes the harsh/jagged high-frequency edge from the noise burst
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = 1800;
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    // Tiny linear attack instead of an instant jump softens the onset
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
     noise.connect(bandpass);
-    bandpass.connect(gain);
+    bandpass.connect(lowpass);
+    lowpass.connect(gain);
     gain.connect(ctx.destination);
     noise.start();
     noise.stop(ctx.currentTime + duration);
@@ -329,12 +338,12 @@ function Onboarding({ initial, onComplete }) {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs" style={{ color: theme.muted }}>Age</span>
-              <input type="number" step="1" value={age} onChange={(e) => setAge(Math.round(Number(e.target.value)))}
+              <input type="number" step="1" value={age} onChange={(e) => { const v = e.target.value; setAge(v === "" ? "" : Math.round(Number(v))); }}
                 className="rounded-lg px-2 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs" style={{ color: theme.muted }}>Weight (lb)</span>
-              <input type="number" step="1" value={weightLb} onChange={(e) => setWeightLb(Math.round(Number(e.target.value)))}
+              <input type="number" step="1" value={weightLb} onChange={(e) => { const v = e.target.value; setWeightLb(v === "" ? "" : Math.round(Number(v))); }}
                 className="rounded-lg px-2 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
             </label>
           </div>
@@ -343,12 +352,12 @@ function Onboarding({ initial, onComplete }) {
             <div className="grid grid-cols-2 gap-3 mt-1">
               <label className="flex flex-col gap-1">
                 <span className="text-[10px]" style={{ color: theme.muted }}>Feet</span>
-                <input type="number" step="1" min="0" value={heightFeet} onChange={(e) => setHeightFeet(Math.round(Number(e.target.value)))}
+                <input type="number" step="1" min="0" value={heightFeet} onChange={(e) => { const v = e.target.value; setHeightFeet(v === "" ? "" : Math.round(Number(v))); }}
                   className="rounded-lg px-2 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-[10px]" style={{ color: theme.muted }}>Inches</span>
-                <input type="number" step="1" min="0" max="11" value={heightInches} onChange={(e) => setHeightInches(Math.round(Number(e.target.value)))}
+                <input type="number" step="1" min="0" max="11" value={heightInches} onChange={(e) => { const v = e.target.value; setHeightInches(v === "" ? "" : Math.round(Number(v))); }}
                   className="rounded-lg px-2 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
               </label>
             </div>
