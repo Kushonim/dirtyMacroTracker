@@ -1,6 +1,6 @@
 // Creates a local test/dev account: username "user", password "ADMIN"
 // DEV/TEST USE ONLY — never seed a predictable password like this on a deployed or public instance.
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const pool = require("./db");
 
 async function seed() {
