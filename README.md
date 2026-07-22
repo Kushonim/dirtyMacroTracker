@@ -1,10 +1,10 @@
-# Macro Loadout
+# Dirty Macro Tracker
 
-A full-stack app that helps you hit your fitness macros using fast food — pick a goal (bulk, dirty bulk, cut, maintain, or keto), and build a "loadout" from real restaurant menu items that fits your daily targets.
+A full-stack app that helps you hit your daily fitness macros using favorite fast food places — pick a goal (bulk, dirty bulk, cut, maintain, or keto), and build a "loadout" from real restaurant menu items that fits your daily targets.
 
 ## Why I built this
 
-I wanted a portfolio project that combined things I actually care about — fitness, food, and gaming — instead of another generic to-do app. The core idea: fast food doesn't have to be off-limits when you're tracking macros, you just need to know what to order.
+I wanted a portfolio project that combined things I actually care about — fitness, nutrition & food, and organizational tools — instead of another generic to-do app. The core idea: fast food doesn't have to be off-limits when you're tracking macros, you just need to know what to order.
 
 ## Features
 
