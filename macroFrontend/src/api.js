@@ -1,4 +1,4 @@
-const API_BASE = "https://dirtymacrotracker.onrender.com/api";
+const API_BASE = "http://localhost:4000/api";
 
 export async function login(username, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
@@ -42,5 +42,16 @@ export async function updateProfile(token, profile) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not save profile");
+  return data;
+}
+
+export async function submitRequest({ request_type, restaurant_name, item_name, note }) {
+  const res = await fetch(`${API_BASE}/requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ request_type, restaurant_name, item_name, note }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not submit request");
   return data;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil, LogOut } from "lucide-react";
-import { login, register, getProfile, updateProfile } from "./api";
+import { login, register, getProfile, updateProfile, submitRequest } from "./api";
+import { MessageSquarePlus, X } from "lucide-react";
 
 // ---------- Theme presets ----------
 const THEMES = {
@@ -307,11 +308,103 @@ function Onboarding({ initial, onComplete }) {
   );
 }
 
+// ---------- "Don't see what you're looking for?" request form ----------
+function RequestModal({ onClose, theme }) {
+  const [requestType, setRequestType] = useState("restaurant");
+  const [restaurantName, setRestaurantName] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [note, setNote] = useState("");
+  const [status, setStatus] = useState("idle"); // 'idle' | 'sending' | 'sent' | 'error'
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setStatus("sending");
+    try {
+      await submitRequest({
+        request_type: requestType,
+        restaurant_name: restaurantName || null,
+        item_name: requestType === "menu_item" ? itemName : null,
+        note: note || null,
+      });
+      setStatus("sent");
+    } catch (err) {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+      <div className="w-full max-w-md rounded-3xl p-6 relative" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
+        <button onClick={onClose} className="absolute top-4 right-4">
+          <X size={18} color={theme.muted} />
+        </button>
+
+        {status === "sent" ? (
+          <div className="text-center py-6">
+            <p className="font-display text-lg mb-2" style={{ color: theme.ink }}>Thanks!</p>
+            <p className="text-sm" style={{ color: theme.muted }}>Your request has been sent — appreciate the suggestion.</p>
+            <button onClick={onClose} className="mt-4 rounded-xl px-4 py-2 text-sm font-medium" style={{ backgroundColor: theme.primary, color: theme.surface }}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <h3 className="font-display text-lg mb-1" style={{ color: theme.ink }}>Don't see what you're looking for?</h3>
+            <p className="text-xs mb-4" style={{ color: theme.muted }}>Request a restaurant or a specific menu item and we'll consider adding it.</p>
+
+            <div className="flex rounded-full p-1 gap-1 mb-4" style={{ backgroundColor: theme.bg }}>
+              <button type="button" onClick={() => setRequestType("restaurant")} className="flex-1 py-2 rounded-full text-xs font-medium"
+                style={{ backgroundColor: requestType === "restaurant" ? theme.primary : "transparent", color: requestType === "restaurant" ? theme.surface : theme.ink }}>
+                A restaurant
+              </button>
+              <button type="button" onClick={() => setRequestType("menu_item")} className="flex-1 py-2 rounded-full text-xs font-medium"
+                style={{ backgroundColor: requestType === "menu_item" ? theme.primary : "transparent", color: requestType === "menu_item" ? theme.surface : theme.ink }}>
+                A menu item
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs" style={{ color: theme.muted }}>Restaurant name</span>
+                <input type="text" value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} required
+                  placeholder="e.g. Wendy's" className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+              </label>
+
+              {requestType === "menu_item" && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs" style={{ color: theme.muted }}>Menu item name</span>
+                  <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)} required
+                    placeholder="e.g. Baconator" className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+                </label>
+              )}
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs" style={{ color: theme.muted }}>Anything else? (optional)</span>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+                  className="rounded-lg px-3 py-2 text-sm resize-none" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+              </label>
+            </div>
+
+            {status === "error" && <p className="text-xs mt-2" style={{ color: "#B9705E" }}>Something went wrong — try again in a bit.</p>}
+
+            <button type="submit" disabled={status === "sending"}
+              className="w-full mt-4 rounded-2xl py-3 font-medium transition-transform active:scale-95"
+              style={{ backgroundColor: theme.ink, color: theme.surface, opacity: status === "sending" ? 0.6 : 1 }}>
+              {status === "sending" ? "Sending..." : "Send request"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Main macro loadout app ----------
 function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
   const [chainKey, setChainKey] = useState("mcdonalds");
   const [mode, setMode] = useState("standard");
   const [cart, setCart] = useState([]);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   const targets = computeTargets(profile, goalKey);
   const chain = RESTAURANTS[chainKey];
@@ -395,6 +488,10 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
               ))}
             </div>
 
+            <button onClick={() => setShowRequestModal(true)} className="flex items-center gap-1.5 text-xs mb-4 underline" style={{ color: theme.muted }}>
+              <MessageSquarePlus size={13} /> Don't see what you're looking for?
+            </button>
+
             {visibleItems.length === 0 ? (
               <div className="rounded-2xl p-6 text-center" style={{ backgroundColor: theme.surface, border: `1px dashed ${theme.border}`, color: theme.muted }}>
                 <p className="text-sm">{chain.name} doesn't have a breakfast menu here yet — try McDonald's or Taco Bell, or switch back to Standard.</p>
@@ -456,6 +553,8 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
           </div>
         </aside>
       </main>
+
+      {showRequestModal && <RequestModal theme={theme} onClose={() => setShowRequestModal(false)} />}
     </div>
   );
 }

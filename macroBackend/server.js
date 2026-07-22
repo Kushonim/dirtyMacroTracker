@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const requestsRouter = require("./routes/requests");
 require("dotenv").config();
 
 const { router: authRouter } = require("./routes/auth");
@@ -9,6 +10,7 @@ app.use(cors({ origin: "https://dirty-macro-tracker-git-main-kushonim1.vercel.ap
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
+app.use("/api/requests", requestsRouter);
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
