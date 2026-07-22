@@ -5,7 +5,7 @@ require("dotenv").config();
 const { router: authRouter } = require("./routes/auth");
 
 const app = express();
-app.use(cors({ origin: "dirty-macro-tracker-ltv0n91v0-kushonim1.vercel.app" }));
+app.use(cors({ origin: "https://dirty-macro-tracker-git-main-kushonim1.vercel.app" }));
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
