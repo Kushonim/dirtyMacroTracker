@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "https://dirtymacrotracker.onrender.com/api";
 
 export async function login(username, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {

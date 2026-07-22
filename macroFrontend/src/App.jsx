@@ -3,7 +3,7 @@ import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil
 import { login, register, getProfile, updateProfile, submitRequest } from "./api";
 import { MessageSquarePlus, X } from "lucide-react";
 
-// ---------- Short synthesized "blocky" click sound (no audio file needed) ----------
+// ---------- Short synthesized "wood block knock" click sound (no audio file needed) ----------
 let sharedAudioCtx = null;
 function playClickSound() {
   try {
@@ -12,17 +12,32 @@ function playClickSound() {
       sharedAudioCtx = new AudioCtx();
     }
     const ctx = sharedAudioCtx;
-    const osc = ctx.createOscillator();
+    const duration = 0.09;
+
+    // Short burst of noise shaped by a bandpass filter = percussive "knock" instead of a tone/beep
+    const bufferSize = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = "bandpass";
+    bandpass.frequency.value = 1100;
+    bandpass.Q.value = 3.5;
+
     const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(220, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.05);
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
-    osc.connect(gain);
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    noise.connect(bandpass);
+    bandpass.connect(gain);
     gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.07);
+    noise.start();
+    noise.stop(ctx.currentTime + duration);
   } catch (e) {
     // Web Audio not available — fail silently, sound is a nice-to-have, not critical
   }
@@ -188,6 +203,9 @@ function AuthScreen({ onAuthed, onSkip }) {
           transition: transform 0.15s ease, box-shadow 0.15s ease;
           cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
         }
+        .food-card button {
+          cursor: inherit;
+        }
         .food-card:hover {
           transform: translateY(-3px);
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
@@ -270,6 +288,9 @@ function Onboarding({ initial, onComplete }) {
         .food-card {
           transition: transform 0.15s ease, box-shadow 0.15s ease;
           cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
+        }
+        .food-card button {
+          cursor: inherit;
         }
         .food-card:hover {
           transform: translateY(-3px);
@@ -506,6 +527,9 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
           transition: transform 0.15s ease, box-shadow 0.15s ease;
           cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
         }
+        .food-card button {
+          cursor: inherit;
+        }
         .food-card:hover {
           transform: translateY(-3px);
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
@@ -529,7 +553,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
 
         <div className="flex items-center gap-3">
           <button onClick={onEditProfile} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
-            <Pencil size={12} /> Edit profile
+            {isGuest ? <><ArrowRight size={12} /> Sign up</> : <><Pencil size={12} /> Edit profile</>}
           </button>
           {!isGuest && (
             <button onClick={onLogout} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
@@ -717,7 +741,12 @@ export default function App() {
   };
 
   const handleEditProfile = () => {
-    setScreen("onboarding");
+    if (isGuest) {
+      setIsGuest(false);
+      setScreen("auth");
+    } else {
+      setScreen("onboarding");
+    }
   };
 
   if (screen === "loading") return null;
