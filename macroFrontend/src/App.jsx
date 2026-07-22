@@ -3,6 +3,31 @@ import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil
 import { login, register, getProfile, updateProfile, submitRequest } from "./api";
 import { MessageSquarePlus, X } from "lucide-react";
 
+// ---------- Short synthesized "blocky" click sound (no audio file needed) ----------
+let sharedAudioCtx = null;
+function playClickSound() {
+  try {
+    if (!sharedAudioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      sharedAudioCtx = new AudioCtx();
+    }
+    const ctx = sharedAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(220, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.05);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.07);
+  } catch (e) {
+    // Web Audio not available — fail silently, sound is a nice-to-have, not critical
+  }
+}
+
 // ---------- Theme presets ----------
 const THEMES = {
   standard: {
@@ -149,6 +174,24 @@ function AuthScreen({ onAuthed, onSkip }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
+
+        button:not(:disabled), .clickable {
+          transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        button:not(:disabled):hover, .clickable:hover {
+          filter: brightness(1.08);
+        }
+        button:not(:disabled):active {
+          transform: scale(0.96);
+        }
+        .food-card {
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
+        }
+        .food-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }
       `}</style>
       <div className="w-full max-w-sm px-6">
         <div className="flex items-center gap-3 mb-8 justify-center">
@@ -214,6 +257,24 @@ function Onboarding({ initial, onComplete }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
+
+        button:not(:disabled), .clickable {
+          transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        button:not(:disabled):hover, .clickable:hover {
+          filter: brightness(1.08);
+        }
+        button:not(:disabled):active {
+          transform: scale(0.96);
+        }
+        .food-card {
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
+        }
+        .food-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }
       `}</style>
       <div className="max-w-lg mx-auto px-6 py-12">
         <div className="flex items-center gap-3 mb-8">
@@ -431,6 +492,24 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
+
+        button:not(:disabled), .clickable {
+          transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        button:not(:disabled):hover, .clickable:hover {
+          filter: brightness(1.08);
+        }
+        button:not(:disabled):active {
+          transform: scale(0.96);
+        }
+        .food-card {
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext x='0' y='24' font-size='24'%3E%F0%9F%8D%B4%3C/text%3E%3C/svg%3E") 16 16, pointer;
+        }
+        .food-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }
       `}</style>
 
       <header className="max-w-5xl mx-auto px-6 pt-10 pb-6 flex items-center justify-between gap-3 flex-wrap">
@@ -499,7 +578,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">
                 {visibleItems.map((item) => (
-                  <div key={item.id} className="rounded-2xl p-4 flex flex-col justify-between transition-colors duration-500"
+                  <div key={item.id} className="food-card rounded-2xl p-4 flex flex-col justify-between transition-colors duration-500"
                     style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
                     <div>
                       <h3 className="font-semibold text-sm" style={{ color: theme.ink }}>{item.name}</h3>
@@ -566,6 +645,16 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [goalKey, setGoalKey] = useState("bulk");
   const [isGuest, setIsGuest] = useState(false);
+
+  // Play a short click sound whenever any button (or .clickable element) is clicked, anywhere in the app
+  useEffect(() => {
+    const handleClick = (e) => {
+      const target = e.target.closest("button, .clickable");
+      if (target && !target.disabled) playClickSound();
+    };
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
 
   // On mount, if we have a saved token, try to load the profile
   useEffect(() => {
