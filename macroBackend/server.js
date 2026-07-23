@@ -11,6 +11,7 @@ require("dotenv").config();
 
 const { router: authRouter } = require("./routes/auth");
 const requestsRouter = require("./routes/requests");
+const bugReportsRouter = require("./routes/bugReports");
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRouter);
 app.use("/api/requests", requestsRouter);
+app.use("/api/bug-reports", bugReportsRouter);
 
 // Simple uptime check — useful for confirming the deploy is alive without
 // needing valid credentials, and for free-tier hosts that spin down when

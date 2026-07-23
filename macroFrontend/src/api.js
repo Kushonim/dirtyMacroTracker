@@ -64,3 +64,15 @@ export async function submitRequest({ request_type, restaurant_name, item_name, 
   if (!res.ok) throw new Error(data.error || "Could not submit request");
   return data;
 }
+
+// Public endpoint — bugs don't care whether you're logged in.
+export async function submitBugReport({ description, contact_info }) {
+  const res = await fetch(`${API_BASE}/bug-reports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description, contact_info }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not submit bug report");
+  return data;
+}

@@ -17,9 +17,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight,
-  Pencil, LogOut, Moon, Sun, MessageSquarePlus, X,
+  Pencil, LogOut, Moon, Sun, MessageSquarePlus, X, Bug,
 } from "lucide-react";
-import { login, register, getProfile, updateProfile, submitRequest } from "./api";
+import { login, register, getProfile, updateProfile, submitRequest, submitBugReport } from "./api";
 
 // ---------- Click sound ----------
 // Four real wood-block recordings, one picked at random per click for
@@ -571,12 +571,85 @@ function RequestModal({ onClose, theme }) {
   );
 }
 
+// ---------- Bug report modal ----------
+// Same public, no-auth pattern as RequestModal — a bug can happen to a
+// guest just as easily as a logged-in user, so this shouldn't require
+// signing in to report.
+function BugReportModal({ onClose, theme }) {
+  const [description, setDescription] = useState("");
+  const [contactInfo, setContactInfo] = useState("");
+  const [status, setStatus] = useState("idle"); // 'idle' | 'sending' | 'sent' | 'error'
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setStatus("sending");
+    try {
+      await submitBugReport({ description, contact_info: contactInfo || null });
+      setStatus("sent");
+    } catch (err) {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+      <div className="w-full max-w-md rounded-3xl p-6 relative" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
+        <button onClick={onClose} className="absolute top-4 right-4">
+          <X size={18} color={theme.muted} />
+        </button>
+
+        {status === "sent" ? (
+          <div className="text-center py-6">
+            <p className="font-display text-lg mb-2" style={{ color: theme.ink }}>Thanks for the heads up!</p>
+            <p className="text-sm" style={{ color: theme.muted }}>Your bug report has been sent — appreciate you flagging it.</p>
+            <button onClick={onClose} className="mt-4 rounded-xl px-4 py-2 text-sm font-medium" style={{ backgroundColor: theme.primary, color: theme.surface }}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <h3 className="font-display text-lg mb-1 flex items-center gap-2" style={{ color: theme.ink }}>
+              <Bug size={18} /> Report a bug
+            </h3>
+            <p className="text-xs mb-4" style={{ color: theme.muted }}>Something broken or acting weird? Let us know what happened.</p>
+
+            <div className="space-y-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs" style={{ color: theme.muted }}>What happened?</span>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} required
+                  placeholder="e.g. The macro meters didn't update after I added an item"
+                  className="rounded-lg px-3 py-2 text-sm resize-none" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs" style={{ color: theme.muted }}>Contact info (optional)</span>
+                <input type="text" value={contactInfo} onChange={(e) => setContactInfo(e.target.value)}
+                  placeholder="Email, if you'd like a reply" className="rounded-lg px-3 py-2 text-sm"
+                  style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+              </label>
+            </div>
+
+            {status === "error" && <p className="text-xs mt-2" style={{ color: "#B9705E" }}>Something went wrong — try again in a bit.</p>}
+
+            <button type="submit" disabled={status === "sending"}
+              className="w-full mt-4 rounded-2xl py-3 font-medium transition-transform active:scale-95"
+              style={{ backgroundColor: theme.ink, color: theme.surface, opacity: status === "sending" ? 0.6 : 1 }}>
+              {status === "sending" ? "Sending..." : "Send bug report"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Screen 3: Main app (restaurant browser + macro tracker) ----------
-function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark }) {
+function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark, username }) {
   const [chainKey, setChainKey] = useState("mcdonalds");
   const [mode, setMode] = useState("standard"); // 'standard' | 'breakfast' — drives both theme and visible menu items
   const [cart, setCart] = useState([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showBugModal, setShowBugModal] = useState(false);
 
   const targets = computeTargets(profile, goalKey);
   const chain = RESTAURANTS[chainKey];
@@ -634,6 +707,9 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
             <ModeIcon size={20} color={theme.surface} />
           </div>
           <div>
+            {!isGuest && username && (
+              <p className="text-xs mb-0.5" style={{ color: theme.muted }}>Hello, {username}</p>
+            )}
             <h1 className="font-display text-2xl transition-colors duration-500" style={{ color: theme.ink }}>
               {mode === "breakfast" ? "Rise & Shine" : "Macro Loadout"}
             </h1>
@@ -647,7 +723,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
           {/* Guests see "Sign up" (routes to AuthScreen) instead of "Edit profile"
               (routes to Onboarding) — see handleEditProfile below for the branch. */}
           <button onClick={onEditProfile} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
-            {isGuest ? <><ArrowRight size={12} /> Sign up</> : <><Pencil size={12} /> Edit profile</>}
+            {isGuest ? <><ArrowRight size={12} /> Sign up / Sign in</> : <><Pencil size={12} /> Edit profile</>}
           </button>
           {!isGuest && (
             <button onClick={onLogout} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
@@ -753,6 +829,15 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
       </main>
 
       {showRequestModal && <RequestModal theme={theme} onClose={() => setShowRequestModal(false)} />}
+      {showBugModal && <BugReportModal theme={theme} onClose={() => setShowBugModal(false)} />}
+
+      <button
+        onClick={() => setShowBugModal(true)}
+        className="fixed bottom-6 right-6 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-medium shadow-lg z-40"
+        style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}`, color: theme.muted }}
+      >
+        <Bug size={14} /> Report a bug
+      </button>
     </div>
   );
 }
@@ -770,6 +855,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [goalKey, setGoalKey] = useState("bulk");
   const [isGuest, setIsGuest] = useState(false);
+  const [username, setUsername] = useState(null);
   const [isDark, setIsDark] = useState(() => localStorage.getItem("darkMode") === "true");
 
   const toggleDark = () => {
@@ -799,6 +885,7 @@ export default function App() {
     if (!token) { setScreen("auth"); return; }
     getProfile(token)
       .then((data) => {
+        setUsername(data.username);
         if (data.age == null) {
           setScreen("onboarding");
         } else {
@@ -855,6 +942,7 @@ export default function App() {
     setToken(null);
     setProfile(null);
     setIsGuest(false);
+    setUsername(null);
     setScreen("auth");
   };
 
@@ -873,5 +961,5 @@ export default function App() {
   if (screen === "loading") return null;
   if (screen === "auth") return <AuthScreen onAuthed={handleAuthed} onSkip={handleSkip} isDark={isDark} onToggleDark={toggleDark} />;
   if (screen === "onboarding") return <Onboarding initial={{ profile, goalKey }} onComplete={handleOnboardingComplete} isDark={isDark} onToggleDark={toggleDark} />;
-  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} />;
+  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} username={username} />;
 }
