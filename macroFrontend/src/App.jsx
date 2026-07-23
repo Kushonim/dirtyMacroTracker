@@ -1,69 +1,73 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil, LogOut } from "lucide-react";
+import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil, LogOut, Moon, Sun } from "lucide-react";
 import { login, register, getProfile, updateProfile, submitRequest } from "./api";
 import { MessageSquarePlus, X } from "lucide-react";
 
-// ---------- Short synthesized "wood block knock" click sound (no audio file needed) ----------
-let sharedAudioCtx = null;
+// ---------- Click sound: randomly picks one of four real wood-block sounds for variety ----------
+const WOOD_SOUND_FILES = ["/sounds/wood1.ogg", "/sounds/wood2.ogg", "/sounds/wood3.ogg", "/sounds/wood4.ogg"];
+const woodAudioPool = WOOD_SOUND_FILES.map((src) => {
+  const audio = new Audio(src);
+  audio.preload = "auto";
+  audio.volume = 0.5;
+  return audio;
+});
+
 function playClickSound() {
   try {
-    if (!sharedAudioCtx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      sharedAudioCtx = new AudioCtx();
-    }
-    const ctx = sharedAudioCtx;
-    const duration = 0.13;
-
-    // Short burst of noise, shaped into a soft "thud" rather than a harsh click
-    const bufferSize = Math.floor(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-
-    // Bandpass gives it a woody "body", low Q so it's a soft thump rather than a ringing tone
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = "bandpass";
-    bandpass.frequency.value = 550;
-    bandpass.Q.value = 1.2;
-
-    // Lowpass removes the harsh/jagged high-frequency edge from the noise burst
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = "lowpass";
-    lowpass.frequency.value = 1800;
-
-    const gain = ctx.createGain();
-    // Tiny linear attack instead of an instant jump softens the onset
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-    noise.connect(bandpass);
-    bandpass.connect(lowpass);
-    lowpass.connect(gain);
-    gain.connect(ctx.destination);
-    noise.start();
-    noise.stop(ctx.currentTime + duration);
+    const base = woodAudioPool[Math.floor(Math.random() * woodAudioPool.length)];
+    // Clone so rapid clicks can overlap instead of cutting each other off
+    const instance = base.cloneNode();
+    instance.volume = base.volume;
+    instance.play().catch(() => {
+      // Autoplay can be blocked before the first user gesture — harmless, sound just skips that once
+    });
   } catch (e) {
-    // Web Audio not available — fail silently, sound is a nice-to-have, not critical
+    // Audio playback not available — fail silently, sound is a nice-to-have, not critical
   }
 }
 
-// ---------- Theme presets ----------
+// ---------- Theme presets (each has a light and dark variant) ----------
 const THEMES = {
   standard: {
-    label: "Standard", icon: Leaf, bg: "#F2ECDD", bgGradient: "#F2ECDD", surface: "#FAF6EC",
-    border: "#E7DCC4", ink: "#3A3229", muted: "#8A7F6E", primary: "#6B7F5E", accent: "#D9A441",
+    light: {
+      label: "Standard", icon: Leaf, bg: "#F2ECDD", bgGradient: "#F2ECDD", surface: "#FAF6EC",
+      border: "#E7DCC4", ink: "#3A3229", muted: "#8A7F6E", primary: "#6B7F5E", accent: "#D9A441",
+    },
+    dark: {
+      label: "Standard", icon: Leaf, bg: "#211F1A", bgGradient: "#211F1A", surface: "#2A2822",
+      border: "#3D392F", ink: "#EDE6D6", muted: "#A69C89", primary: "#7FA06B", accent: "#E0B04E",
+    },
   },
   breakfast: {
-    label: "Rise & Shine", icon: Sunrise, bg: "#FBEADD",
-    bgGradient: "linear-gradient(180deg, #FDF1E4 0%, #F7D9B8 100%)", surface: "#FFF6EC",
-    border: "#F0D9BE", ink: "#4A342A", muted: "#9C8171", primary: "#E8935A", accent: "#F2C14E",
+    light: {
+      label: "Rise & Shine", icon: Sunrise, bg: "#FBEADD",
+      bgGradient: "linear-gradient(180deg, #FDF1E4 0%, #F7D9B8 100%)", surface: "#FFF6EC",
+      border: "#F0D9BE", ink: "#4A342A", muted: "#9C8171", primary: "#E8935A", accent: "#F2C14E",
+    },
+    dark: {
+      label: "Rise & Shine", icon: Sunrise, bg: "#241A14",
+      bgGradient: "linear-gradient(180deg, #241A14 0%, #2E2019 100%)", surface: "#2E2019",
+      border: "#423024", ink: "#F5E4D3", muted: "#B99A85", primary: "#E8935A", accent: "#F2C14E",
+    },
   },
 };
+
+function resolveTheme(modeKey, isDark) {
+  return THEMES[modeKey][isDark ? "dark" : "light"];
+}
+
+function DarkModeToggle({ isDark, onToggle, theme, className }) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${className || ""}`}
+      style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}
+      aria-label="Toggle dark mode"
+    >
+      {isDark ? <Sun size={16} color={theme.accent} /> : <Moon size={16} color={theme.muted} />}
+    </button>
+  );
+}
 
 const GOAL_CONFIG = {
   bulk: { label: "Bulk", desc: "Steady surplus", calAdjust: 1.15, ratios: { protein: 0.30, carb: 0.45, fat: 0.25 } },
@@ -171,15 +175,13 @@ function PlantMeter({ pct, label, color, ink, muted }) {
 }
 
 // ---------- Auth screen: login/signup + skip ----------
-function AuthScreen({ onAuthed, onSkip }) {
+function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const theme = THEMES.standard;
-
-  const submit = async (e) => {
+  const theme = resolveTheme("standard", isDark);
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -194,7 +196,7 @@ function AuthScreen({ onAuthed, onSkip }) {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center" style={{ backgroundColor: theme.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full flex items-center justify-center relative" style={{ backgroundColor: theme.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
@@ -220,6 +222,9 @@ function AuthScreen({ onAuthed, onSkip }) {
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
         }
       `}</style>
+      <div className="absolute top-6 right-6">
+        <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
+      </div>
       <div className="w-full max-w-sm px-6">
         <div className="flex items-center gap-3 mb-8 justify-center">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ backgroundColor: theme.primary }}>
@@ -263,7 +268,7 @@ function AuthScreen({ onAuthed, onSkip }) {
 }
 
 // ---------- Onboarding ----------
-function Onboarding({ initial, onComplete }) {
+function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
   const [goalKey, setGoalKey] = useState(initial?.goalKey || "bulk");
   const [sex, setSex] = useState(initial?.profile?.sex || "male");
   const [age, setAge] = useState(initial?.profile?.age || 25);
@@ -273,14 +278,17 @@ function Onboarding({ initial, onComplete }) {
   const [weightLb, setWeightLb] = useState(Math.round(initial?.profile?.weightLb || 170));
   const [activity, setActivity] = useState(initial?.profile?.activity || "moderate");
   const [hoveredActivity, setHoveredActivity] = useState(null);
-  const theme = THEMES.standard;
+  const theme = resolveTheme("standard", isDark);
 
   const heightIn = heightFeet * 12 + heightInches;
 
   const preview = computeTargets({ sex, age, heightIn, weightLb, activity }, goalKey);
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: theme.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full relative" style={{ backgroundColor: theme.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div className="absolute top-6 right-6">
+        <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
+      </div>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
@@ -491,7 +499,7 @@ function RequestModal({ onClose, theme }) {
 }
 
 // ---------- Main macro loadout app ----------
-function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
+function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark }) {
   const [chainKey, setChainKey] = useState("mcdonalds");
   const [mode, setMode] = useState("standard");
   const [cart, setCart] = useState([]);
@@ -499,7 +507,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
 
   const targets = computeTargets(profile, goalKey);
   const chain = RESTAURANTS[chainKey];
-  const theme = THEMES[mode];
+  const theme = resolveTheme(mode, isDark);
   const ModeIcon = theme.icon;
   const visibleItems = chain.items.filter((i) => i.period === mode);
 
@@ -571,14 +579,15 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest }) {
           )}
           <div className="flex rounded-full p-1 gap-1" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
             <button onClick={() => setMode("standard")} className="px-4 py-2 rounded-full text-sm font-medium flex items-center gap-1.5 transition-all"
-              style={{ backgroundColor: mode === "standard" ? THEMES.standard.primary : "transparent", color: mode === "standard" ? THEMES.standard.surface : theme.muted }}>
+              style={{ backgroundColor: mode === "standard" ? resolveTheme("standard", isDark).primary : "transparent", color: mode === "standard" ? resolveTheme("standard", isDark).surface : theme.muted }}>
               <Leaf size={14} /> Standard
             </button>
             <button onClick={() => setMode("breakfast")} className="px-4 py-2 rounded-full text-sm font-medium flex items-center gap-1.5 transition-all"
-              style={{ backgroundColor: mode === "breakfast" ? THEMES.breakfast.primary : "transparent", color: mode === "breakfast" ? THEMES.breakfast.surface : theme.muted }}>
+              style={{ backgroundColor: mode === "breakfast" ? resolveTheme("breakfast", isDark).primary : "transparent", color: mode === "breakfast" ? resolveTheme("breakfast", isDark).surface : theme.muted }}>
               <Sunrise size={14} /> Breakfast
             </button>
           </div>
+          <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
         </div>
       </header>
 
@@ -678,6 +687,14 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [goalKey, setGoalKey] = useState("bulk");
   const [isGuest, setIsGuest] = useState(false);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("darkMode") === "true");
+
+  const toggleDark = () => {
+    setIsDark((prev) => {
+      localStorage.setItem("darkMode", String(!prev));
+      return !prev;
+    });
+  };
 
   // Play a short click sound whenever any button (or .clickable element) is clicked, anywhere in the app
   useEffect(() => {
@@ -759,7 +776,7 @@ export default function App() {
   };
 
   if (screen === "loading") return null;
-  if (screen === "auth") return <AuthScreen onAuthed={handleAuthed} onSkip={handleSkip} />;
-  if (screen === "onboarding") return <Onboarding initial={{ profile, goalKey }} onComplete={handleOnboardingComplete} />;
-  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} />;
+  if (screen === "auth") return <AuthScreen onAuthed={handleAuthed} onSkip={handleSkip} isDark={isDark} onToggleDark={toggleDark} />;
+  if (screen === "onboarding") return <Onboarding initial={{ profile, goalKey }} onComplete={handleOnboardingComplete} isDark={isDark} onToggleDark={toggleDark} />;
+  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} />;
 }
