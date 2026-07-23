@@ -1,3 +1,11 @@
+/**
+ * Thin wrapper around the backend's REST API. Every function here mirrors
+ * one endpoint 1:1 — no caching or state lives in this file, that's handled
+ * by the React components that call these.
+ *
+ * Swapping environments (local dev vs. the deployed API) is a one-line
+ * change: just update API_BASE below.
+ */
 const API_BASE = "https://dirtymacrotracker.onrender.com/api";
 
 export async function login(username, password) {
@@ -45,6 +53,7 @@ export async function updateProfile(token, profile) {
   return data;
 }
 
+// Public endpoint — no auth header, since guests can submit requests too.
 export async function submitRequest({ request_type, restaurant_name, item_name, note }) {
   const res = await fetch(`${API_BASE}/requests`, {
     method: "POST",

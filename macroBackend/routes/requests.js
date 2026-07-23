@@ -1,9 +1,16 @@
+/**
+ * "Don't see what you're looking for?" feature requests.
+ *
+ * Deliberately has no auth requirement — guests (people who skipped account
+ * creation) should still be able to suggest a restaurant or menu item, so
+ * this is one of the only writes in the app that doesn't require a JWT.
+ */
 const express = require("express");
 const pool = require("../db");
 
 const router = express.Router();
 
-// POST /api/requests - anyone (including guests) can submit a request
+// POST /api/requests
 router.post("/", async (req, res) => {
   const { request_type, restaurant_name, item_name, note } = req.body;
 

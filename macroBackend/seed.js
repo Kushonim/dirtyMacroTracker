@@ -1,5 +1,14 @@
-// Creates a local test/dev account: username "user", password "ADMIN"
-// DEV/TEST USE ONLY — never seed a predictable password like this on a deployed or public instance.
+/**
+ * Seeds a single local test/dev account for manually exercising the API
+ * (e.g. with Thunder Client or Postman) before wiring up the frontend.
+ *
+ * DEV/TEST USE ONLY. The username/password here are intentionally simple
+ * and predictable, which is fine for a throwaway local account but would
+ * be a real vulnerability on any deployed, publicly reachable database —
+ * never run this against a production instance.
+ *
+ * Run with: npm run seed
+ */
 const bcrypt = require("bcryptjs");
 const pool = require("./db");
 

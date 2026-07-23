@@ -1,3 +1,22 @@
+/**
+ * Auth routes: registration, login, and reading/updating the logged-in
+ * user's profile (the stats used to calculate their daily macro targets).
+ *
+ * Passwords are never stored or compared in plain text — bcryptjs hashes
+ * them one-way on register, and login re-hashes the attempt and compares
+ * hashes rather than "decrypting" anything (hashing isn't reversible by
+ * design). bcryptjs (a pure-JS implementation) is used instead of the
+ * native `bcrypt` package specifically to avoid a real bug hit during
+ * deployment: `bcrypt` compiles a platform-specific binary, so a version
+ * built on Windows during local development wouldn't run on Render's
+ * Linux containers. bcryptjs has an identical API with no compiled binary,
+ * so the exact same code runs correctly in both environments.
+ *
+ * Sessions are stateless JWTs rather than server-side session storage —
+ * the token itself carries the user's id (signed, not encrypted) and gets
+ * verified on every request that needs auth, so there's no session table
+ * to manage or expire manually beyond the token's own expiry.
+ */
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -6,7 +25,11 @@ const pool = require("../db");
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Middleware: verify JWT and attach userId to req
+/**
+ * Middleware for any route that requires a logged-in user.
+ * Expects `Authorization: Bearer <token>`, verifies the JWT, and attaches
+ * the decoded user id to req.userId for the route handler to use.
+ */
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: "No token provided" });
@@ -20,7 +43,8 @@ function requireAuth(req, res, next) {
   }
 }
 
-// POST /api/auth/register
+// POST /api/auth/register — create an account, return a ready-to-use token
+// so the frontend doesn't need a separate login call right after signing up.
 router.post("/register", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -67,7 +91,10 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// GET /api/auth/profile - fetch current user's profile
+// GET /api/auth/profile — the onboarding/macro-calculation stats for the
+// logged-in user. A null `age` (etc.) tells the frontend this account
+// hasn't completed onboarding yet, and should be routed there instead of
+// straight into the main app.
 router.get("/profile", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -82,7 +109,10 @@ router.get("/profile", requireAuth, async (req, res) => {
   }
 });
 
-// PUT /api/auth/profile - update profile fields (onboarding form submits here)
+// PUT /api/auth/profile — the onboarding form (and "edit profile" later)
+// both submit here. Height/weight arrive already converted to cm/kg by the
+// frontend, so the stored units are consistent regardless of which unit
+// the user was shown (ft/in vs cm).
 router.put("/profile", requireAuth, async (req, res) => {
   const { sex, age, height_cm, weight_kg, activity_level, goal_type } = req.body;
   try {

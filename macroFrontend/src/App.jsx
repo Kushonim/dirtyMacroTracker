@@ -1,9 +1,29 @@
+/**
+ * Macro Loadout — main application file.
+ *
+ * Architecture: this is a single-file, three-screen app driven by one
+ * top-level state machine (see the default-exported `App` component at the
+ * bottom). `screen` decides which of AuthScreen / Onboarding / MacroApp
+ * renders; each screen is otherwise a self-contained component with its
+ * own local state.
+ *
+ * A known tradeoff worth calling out: each screen renders its own
+ * <style> block with the same hover/cursor/font CSS repeated three times,
+ * rather than one shared global stylesheet. That's a deliberate shortcut
+ * for a single-file, fast-iterating personal project — the natural next
+ * refactor would be hoisting that CSS into index.css once, or splitting
+ * this file into separate component files.
+ */
 import React, { useState, useEffect, useMemo } from "react";
-import { Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight, Pencil, LogOut, Moon, Sun } from "lucide-react";
+import {
+  Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight,
+  Pencil, LogOut, Moon, Sun, MessageSquarePlus, X,
+} from "lucide-react";
 import { login, register, getProfile, updateProfile, submitRequest } from "./api";
-import { MessageSquarePlus, X } from "lucide-react";
 
-// ---------- Click sound: randomly picks one of four real wood-block sounds for variety ----------
+// ---------- Click sound ----------
+// Four real wood-block recordings, one picked at random per click for
+// natural variation instead of the same exact sound every time.
 const WOOD_SOUND_FILES = ["/sounds/wood1.ogg", "/sounds/wood2.ogg", "/sounds/wood3.ogg", "/sounds/wood4.ogg"];
 const woodAudioPool = WOOD_SOUND_FILES.map((src) => {
   const audio = new Audio(src);
@@ -12,21 +32,33 @@ const woodAudioPool = WOOD_SOUND_FILES.map((src) => {
   return audio;
 });
 
+/**
+ * Plays one random wood-block click sound. Called from a single delegated
+ * click listener in the top-level App component (see bottom of file) rather
+ * than wired into every individual button — new buttons get the sound for
+ * free with no extra code.
+ */
 function playClickSound() {
   try {
     const base = woodAudioPool[Math.floor(Math.random() * woodAudioPool.length)];
-    // Clone so rapid clicks can overlap instead of cutting each other off
+    // Clone so rapid clicks can overlap instead of cutting each other off.
     const instance = base.cloneNode();
     instance.volume = base.volume;
     instance.play().catch(() => {
-      // Autoplay can be blocked before the first user gesture — harmless, sound just skips that once
+      // Browsers block audio before the first user gesture on the page —
+      // harmless, the very first click of a session may be silent.
     });
   } catch (e) {
-    // Audio playback not available — fail silently, sound is a nice-to-have, not critical
+    // Audio playback unsupported — fail silently, sound is a nice-to-have.
   }
 }
 
-// ---------- Theme presets (each has a light and dark variant) ----------
+// ---------- Theme presets ----------
+// Two independent axes: `mode` (standard vs. breakfast, which changes both
+// color palette AND which menu items are visible) and `isDark` (a straight
+// light/dark swap layered on top of whichever mode is active). Every
+// screen resolves its palette through resolveTheme() below rather than
+// touching THEMES directly, so dark mode "just works" everywhere at once.
 const THEMES = {
   standard: {
     light: {
@@ -56,6 +88,7 @@ function resolveTheme(modeKey, isDark) {
   return THEMES[modeKey][isDark ? "dark" : "light"];
 }
 
+/** Small reusable sun/moon toggle button, dropped into all three screens. */
 function DarkModeToggle({ isDark, onToggle, theme, className }) {
   return (
     <button
@@ -69,6 +102,11 @@ function DarkModeToggle({ isDark, onToggle, theme, className }) {
   );
 }
 
+// ---------- Goal + macro calculation config ----------
+// calAdjust scales TDEE up/down per goal; ratios split the resulting
+// calories into protein/carb/fat grams. Keto's ratio (high fat, ~5% carb)
+// is what actually distinguishes it from "maintain" — same calorie target,
+// completely different macro split.
 const GOAL_CONFIG = {
   bulk: { label: "Bulk", desc: "Steady surplus", calAdjust: 1.15, ratios: { protein: 0.30, carb: 0.45, fat: 0.25 } },
   dirty_bulk: { label: "Dirty Bulk", desc: "Aggressive surplus", calAdjust: 1.30, ratios: { protein: 0.25, carb: 0.50, fat: 0.25 } },
@@ -77,18 +115,29 @@ const GOAL_CONFIG = {
   keto: { label: "Keto", desc: "High fat, low carb", calAdjust: 1.0, ratios: { protein: 0.25, carb: 0.05, fat: 0.70 } },
 };
 
+// Standard TDEE activity multipliers (sedentary / moderate / active).
 const ACTIVITY_LEVELS = {
   sedentary: { label: "Sedentary", factor: 1.2 },
   moderate: { label: "Moderate", factor: 1.55 },
   active: { label: "Active", factor: 1.725 },
 };
 
+// Shown as a hover tooltip in onboarding so users can self-select an
+// activity level from a concrete example instead of guessing what
+// "moderate" means.
 const ACTIVITY_EXAMPLES = {
   sedentary: "Desk job, mostly sitting, little to no structured exercise",
   moderate: "Workouts or sports 3-5 days a week, or an on-your-feet job",
   active: "Hard training 6-7 days a week, or physically demanding work",
 };
 
+/**
+ * Core macro math: Mifflin-St Jeor BMR -> TDEE (via activity multiplier)
+ * -> goal-adjusted calorie target -> macro grams (via the goal's ratio).
+ * This is what turns "I'm a 25-year-old male, 170lb, moderately active,
+ * trying to bulk" into an actual calorie + protein/carb/fat number,
+ * rather than showing the same fixed target to everyone.
+ */
 function computeTargets(profile, goalKey) {
   const { sex, age, heightIn, weightLb, activity } = profile;
   const heightCm = heightIn * 2.54;
@@ -105,6 +154,11 @@ function computeTargets(profile, goalKey) {
   return { calories, protein, carbs, fat };
 }
 
+// ---------- Mock restaurant menu data ----------
+// Placeholder for what should eventually be a real `menu_items` table
+// (see schema.sql) served through a GET /api/menu-items endpoint. Figures
+// here were cross-checked against each chain's published nutrition info
+// at the time of writing, not pulled from a live API.
 const RESTAURANTS = {
   mcdonalds: {
     name: "McDonald's",
@@ -147,10 +201,20 @@ const RESTAURANTS = {
   },
 };
 
+// Shown as disabled, dashed "Soon" buttons in the main app — signals
+// planned scope to a reviewer rather than looking like a missing feature.
 const WIP_CHAINS = ["Wendy's", "Chick-fil-A", "Subway"];
 
+// Used for "Skip for now" guest mode — a reasonable average adult so the
+// app is immediately usable without any signup friction.
 const GENERIC_DEFAULT_PROFILE = { sex: "male", age: 30, heightIn: 68, weightLb: 170, activity: "moderate" };
 
+/**
+ * The signature visual element: a stem that grows and sprouts leaves as a
+ * given macro (calories/protein/carbs/fat) approaches its daily target,
+ * instead of a standard flat progress bar. Purely presentational — takes
+ * a 0-100ish percentage and renders it.
+ */
 function PlantMeter({ pct, label, color, ink, muted }) {
   const clamped = Math.min(100, Math.max(0, pct || 0));
   const stemHeight = 6 + clamped * 0.5;
@@ -174,7 +238,7 @@ function PlantMeter({ pct, label, color, ink, muted }) {
   );
 }
 
-// ---------- Auth screen: login/signup + skip ----------
+// ---------- Screen 1: Auth (login / signup / guest skip) ----------
 function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [username, setUsername] = useState("");
@@ -269,7 +333,10 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   );
 }
 
-// ---------- Onboarding ----------
+// ---------- Screen 2: Onboarding (goal + profile stats) ----------
+// Reached either right after signup (new account, no profile yet) or via
+// "Edit profile" from the main app. `initial` pre-fills the form when
+// editing an existing profile; left undefined on a fresh signup.
 function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
   const [goalKey, setGoalKey] = useState(initial?.goalKey || "bulk");
   const [sex, setSex] = useState(initial?.profile?.sex || "male");
@@ -348,6 +415,8 @@ function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <label className="flex flex-col gap-1">
               <span className="text-xs" style={{ color: theme.muted }}>Age</span>
+              {/* Empty string is a valid, intermediate state here (not coerced to 0) so the
+                  field can actually be cleared and retyped instead of getting stuck showing "0". */}
               <input type="number" step="1" value={age} onChange={(e) => { const v = e.target.value; setAge(v === "" ? "" : Math.round(Number(v))); }}
                 className="rounded-lg px-2 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
             </label>
@@ -409,7 +478,9 @@ function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
   );
 }
 
-// ---------- "Don't see what you're looking for?" request form ----------
+// ---------- "Don't see what you're looking for?" request modal ----------
+// Public feature — works for guests too, since it POSTs to an
+// unauthenticated endpoint (see backend/routes/requests.js).
 function RequestModal({ onClose, theme }) {
   const [requestType, setRequestType] = useState("restaurant");
   const [restaurantName, setRestaurantName] = useState("");
@@ -500,10 +571,10 @@ function RequestModal({ onClose, theme }) {
   );
 }
 
-// ---------- Main macro loadout app ----------
+// ---------- Screen 3: Main app (restaurant browser + macro tracker) ----------
 function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark }) {
   const [chainKey, setChainKey] = useState("mcdonalds");
-  const [mode, setMode] = useState("standard");
+  const [mode, setMode] = useState("standard"); // 'standard' | 'breakfast' — drives both theme and visible menu items
   const [cart, setCart] = useState([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
 
@@ -523,6 +594,8 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
   const changeQty = (id, delta) => {
     setCart((prev) => prev.map((c) => (c.id === id ? { ...c, qty: c.qty + delta } : c)).filter((c) => c.qty > 0));
   };
+  // Running totals across whatever's currently in the cart, recalculated
+  // only when the cart itself changes.
   const totals = useMemo(() => cart.reduce((acc, c) => ({
     cal: acc.cal + c.cal * c.qty, p: acc.p + c.p * c.qty, c: acc.c + c.c * c.qty, f: acc.f + c.f * c.qty,
   }), { cal: 0, p: 0, c: 0, f: 0 }), [cart]);
@@ -571,6 +644,8 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Guests see "Sign up" (routes to AuthScreen) instead of "Edit profile"
+              (routes to Onboarding) — see handleEditProfile below for the branch. */}
           <button onClick={onEditProfile} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
             {isGuest ? <><ArrowRight size={12} /> Sign up</> : <><Pencil size={12} /> Edit profile</>}
           </button>
@@ -683,6 +758,12 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
 }
 
 // ---------- Top-level state machine ----------
+// Owns everything that needs to persist or be shared across screens:
+// which screen is active, the auth token, the resolved profile/goal, guest
+// status, and dark mode. Each screen is a "dumb" component below this one —
+// they receive data and callbacks as props and don't talk to localStorage
+// or the API directly (except AuthScreen/Onboarding calling api.js, which
+// bubbles results back up through the callbacks passed in here).
 export default function App() {
   const [screen, setScreen] = useState("loading"); // 'loading' | 'auth' | 'onboarding' | 'app'
   const [token, setToken] = useState(() => localStorage.getItem("token") || null);
@@ -698,7 +779,9 @@ export default function App() {
     });
   };
 
-  // Play a short click sound whenever any button (or .clickable element) is clicked, anywhere in the app
+  // Single delegated click listener for the wood-block sound — covers
+  // every button (and anything marked .clickable) app-wide without each
+  // one needing its own onClick wiring for audio.
   useEffect(() => {
     const handleClick = (e) => {
       const target = e.target.closest("button, .clickable");
@@ -708,13 +791,16 @@ export default function App() {
     return () => window.removeEventListener("click", handleClick);
   }, []);
 
-  // On mount, if we have a saved token, try to load the profile
+  // On mount, if a token was saved from a previous visit, try to restore
+  // the session by fetching the profile. A profile with no `age` set means
+  // the account exists but never finished onboarding (e.g. signed up, then
+  // closed the tab) — send them there instead of assuming default stats.
   useEffect(() => {
     if (!token) { setScreen("auth"); return; }
     getProfile(token)
       .then((data) => {
         if (data.age == null) {
-          setScreen("onboarding"); // logged in but never finished onboarding
+          setScreen("onboarding");
         } else {
           setProfile({
             sex: data.sex, age: data.age,
@@ -727,6 +813,8 @@ export default function App() {
         }
       })
       .catch(() => {
+        // Token expired or invalid — clear it and fall back to a fresh login
+        // rather than getting stuck on a broken "logged in" state.
         localStorage.removeItem("token");
         setToken(null);
         setScreen("auth");
@@ -746,6 +834,8 @@ export default function App() {
   };
 
   const handleOnboardingComplete = async ({ profile: p, goalKey: g }) => {
+    // Guests never touch the backend — their profile only ever lives in
+    // this component's state and disappears on refresh, by design.
     if (!isGuest && token) {
       await updateProfile(token, {
         sex: p.sex, age: p.age,
@@ -768,6 +858,9 @@ export default function App() {
     setScreen("auth");
   };
 
+  // Guests get sent to sign up for real (their local-only profile would
+  // otherwise vanish); logged-in users go back to onboarding to edit their
+  // existing stats.
   const handleEditProfile = () => {
     if (isGuest) {
       setIsGuest(false);
