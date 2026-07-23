@@ -115,6 +115,43 @@ const GOAL_CONFIG = {
   keto: { label: "Keto", desc: "High fat, low carb", calAdjust: 1.0, ratios: { protein: 0.25, carb: 0.05, fat: 0.70 } },
 };
 
+// Short badge text shown on a menu item card when it matches the
+// currently selected goal.
+const GOAL_MATCH_LABELS = {
+  keto: "Keto friendly",
+  cut: "Great for cutting",
+  bulk: "Good bulk pick",
+  dirty_bulk: "High-calorie pick",
+  maintain: "Balanced pick",
+};
+
+/**
+ * Simple per-goal fit check used to highlight and surface relevant menu
+ * items — not a nutrition-science-grade classifier, just a reasonable
+ * heuristic per goal:
+ *  - keto: low carb, since that's the entire point of the diet
+ *  - cut: moderate calories with protein making up a decent share of them
+ *  - bulk / dirty_bulk: higher-calorie items, since the goal is a surplus
+ *  - maintain: calories and protein-share both sitting in a middle band
+ */
+function matchesGoal(item, goalKey) {
+  const proteinShare = (item.p * 4) / item.cal;
+  switch (goalKey) {
+    case "keto":
+      return item.c <= 20;
+    case "cut":
+      return item.cal <= 500 && proteinShare >= 0.30;
+    case "bulk":
+      return item.cal >= 500;
+    case "dirty_bulk":
+      return item.cal >= 650;
+    case "maintain":
+      return item.cal >= 300 && item.cal <= 550 && proteinShare >= 0.20 && proteinShare <= 0.40;
+    default:
+      return false;
+  }
+}
+
 // Standard TDEE activity multipliers (sedentary / moderate / active).
 const ACTIVITY_LEVELS = {
   sedentary: { label: "Sedentary", factor: 1.2 },
@@ -177,6 +214,7 @@ const RESTAURANTS = {
       { id: "m12", name: "McDouble", cal: 390, p: 22, c: 33, f: 19, period: "standard" },
       { id: "m13", name: "Oreo McFlurry (small)", cal: 510, p: 12, c: 80, f: 16, period: "standard" },
       { id: "m14", name: "Fruit & Yogurt Parfait", cal: 150, p: 4, c: 28, f: 2, period: "breakfast" },
+      { id: "m15", name: "Quarter Pounder w/ Cheese, no bun (protein style)", cal: 340, p: 28, c: 6, f: 22, period: "standard" },
     ],
   },
   chipotle: {
@@ -190,6 +228,7 @@ const RESTAURANTS = {
       { id: "c6", name: "Chips (side)", cal: 540, p: 7, c: 65, f: 27, period: "standard" },
       { id: "c7", name: "Sofritas Bowl (rice, black beans, salsas)", cal: 720, p: 22, c: 95, f: 25, period: "standard" },
       { id: "c8", name: "Guacamole (side)", cal: 230, p: 2, c: 8, f: 22, period: "standard" },
+      { id: "c9", name: "Keto Lifestyle Bowl (double protein, fajita veggies, cheese, guac, lettuce)", cal: 650, p: 45, c: 14, f: 45, period: "standard" },
     ],
   },
   tacobell: {
@@ -207,6 +246,7 @@ const RESTAURANTS = {
       { id: "t10", name: "Chicken Quesadilla", cal: 500, p: 26, c: 39, f: 27, period: "standard" },
       { id: "t11", name: "Nacho Fries", cal: 320, p: 4, c: 33, f: 19, period: "standard" },
       { id: "t12", name: "Black Bean Chalupa", cal: 330, p: 10, c: 39, f: 14, period: "standard" },
+      { id: "t13", name: "Power Bowl, no rice/beans (protein style)", cal: 300, p: 25, c: 10, f: 18, period: "standard" },
     ],
   },
 };
@@ -325,6 +365,13 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
           transform: translateY(-3px);
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
         }
+        @keyframes goalPulse {
+          0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, transparent); }
+          50% { box-shadow: 0 0 16px 3px var(--glow-color, transparent); }
+        }
+        .goal-match {
+          animation: goalPulse 2.4s ease-in-out infinite;
+        }
       `}</style>
       <div className="absolute top-6 right-6">
         <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
@@ -423,6 +470,13 @@ function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
         .food-card:hover {
           transform: translateY(-3px);
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }
+        @keyframes goalPulse {
+          0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, transparent); }
+          50% { box-shadow: 0 0 16px 3px var(--glow-color, transparent); }
+        }
+        .goal-match {
+          animation: goalPulse 2.4s ease-in-out infinite;
         }
       `}</style>
       <div className="max-w-lg mx-auto px-6 py-12">
@@ -698,6 +752,11 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
   const theme = resolveTheme(mode, isDark);
   const ModeIcon = theme.icon;
   const visibleItems = chain.items.filter((i) => i.period === mode);
+  // Goal-matching items float to the top — .sort() is stable in modern JS
+  // engines, so items that don't match keep their original relative order.
+  const sortedItems = [...visibleItems].sort(
+    (a, b) => (matchesGoal(b, goalKey) ? 1 : 0) - (matchesGoal(a, goalKey) ? 1 : 0)
+  );
 
   const addItem = (item) => {
     setCart((prev) => {
@@ -740,6 +799,13 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
         .food-card:hover {
           transform: translateY(-3px);
           box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+        }
+        @keyframes goalPulse {
+          0%, 100% { box-shadow: 0 0 0 0 var(--glow-color, transparent); }
+          50% { box-shadow: 0 0 16px 3px var(--glow-color, transparent); }
+        }
+        .goal-match {
+          animation: goalPulse 2.4s ease-in-out infinite;
         }
       `}</style>
 
@@ -814,20 +880,34 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">
-                {visibleItems.map((item) => (
-                  <div key={item.id} className="food-card rounded-2xl p-4 flex flex-col justify-between transition-colors duration-500"
-                    style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
-                    <div>
-                      <h3 className="font-semibold text-sm" style={{ color: theme.ink }}>{item.name}</h3>
-                      <p className="text-xs mt-1" style={{ color: theme.muted }}>{item.cal} cal</p>
-                      <p className="text-xs" style={{ color: theme.muted }}>Protein {item.p}g · Carbs {item.c}g · Fat {item.f}g</p>
+                {sortedItems.map((item) => {
+                  const isMatch = matchesGoal(item, goalKey);
+                  return (
+                    <div key={item.id}
+                      className={`food-card rounded-2xl p-4 flex flex-col justify-between transition-colors duration-500 relative ${isMatch ? "goal-match" : ""}`}
+                      style={{
+                        backgroundColor: theme.surface,
+                        border: isMatch ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+                        ...(isMatch ? { "--glow-color": `${theme.accent}88` } : {}),
+                      }}>
+                      {isMatch && (
+                        <span className="absolute -top-2 -right-2 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium shadow-sm"
+                          style={{ backgroundColor: theme.accent, color: theme.ink }}>
+                          <Sparkles size={10} /> {GOAL_MATCH_LABELS[goalKey]}
+                        </span>
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-sm" style={{ color: theme.ink }}>{item.name}</h3>
+                        <p className="text-xs mt-1" style={{ color: theme.muted }}>{item.cal} cal</p>
+                        <p className="text-xs" style={{ color: theme.muted }}>Protein {item.p}g · Carbs {item.c}g · Fat {item.f}g</p>
+                      </div>
+                      <button onClick={() => addItem(item)} className="mt-3 flex items-center justify-center gap-1 rounded-xl py-2 text-sm font-medium transition-transform active:scale-95"
+                        style={{ backgroundColor: theme.primary, color: theme.surface }}>
+                        <Plus size={14} /> Add to loadout
+                      </button>
                     </div>
-                    <button onClick={() => addItem(item)} className="mt-3 flex items-center justify-center gap-1 rounded-xl py-2 text-sm font-medium transition-transform active:scale-95"
-                      style={{ backgroundColor: theme.primary, color: theme.surface }}>
-                      <Plus size={14} /> Add to loadout
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
