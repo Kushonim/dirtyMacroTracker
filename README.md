@@ -2,7 +2,7 @@
 
 A full-stack app that helps you hit your daily fitness macros using favorite fast food places — pick a goal (bulk, dirty bulk, cut, maintain, or keto), and build a "loadout" from real restaurant menu items that fits your daily targets.
 
-**Live site:** https://dirty-macro-tracker-git-main-kushonim1.vercel.app/
+**Live site:** https://dirty-macro-tracker.vercel.app/ 
 **Live API:** https://dirtymacrotracker.onrender.com (note: free-tier hosting spins down when idle, so the first request after inactivity can take ~30-50 seconds to respond)
 
 ## Why I built this
