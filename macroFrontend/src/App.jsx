@@ -182,6 +182,8 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const theme = resolveTheme("standard", isDark);
+
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
