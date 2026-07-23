@@ -17,7 +17,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight,
-  Pencil, LogOut, Moon, Sun, MessageSquarePlus, X, Bug,
+  Pencil, LogOut, Moon, Sun, MessageSquarePlus, X, Bug, Flower2, AlertTriangle,
 } from "lucide-react";
 import { login, register, getProfile, updateProfile, submitRequest, submitBugReport } from "./api";
 
@@ -212,25 +212,48 @@ const GENERIC_DEFAULT_PROFILE = { sex: "male", age: 30, heightIn: 68, weightLb: 
 /**
  * The signature visual element: a stem that grows and sprouts leaves as a
  * given macro (calories/protein/carbs/fat) approaches its daily target,
- * instead of a standard flat progress bar. Shows the actual current/target
- * numbers underneath (not just a percentage) so it's clear exactly how
- * much room is left — and flags in a warning color once you've gone over.
+ * instead of a standard flat progress bar. The stem's height is scaled to
+ * use nearly the full container (rather than topping out partway with
+ * empty space above it), and leaves are spaced proportionally along the
+ * *current* stem height so they always sit on visible stem rather than
+ * floating at fixed spots disconnected from the actual growth. A flower
+ * blooms at the top once the goal is exactly hit; going over swaps that
+ * for a warning icon and tints the whole plant red.
  */
 function PlantMeter({ pct, current, target, label, color, ink, muted }) {
   const clamped = Math.min(100, Math.max(0, pct || 0));
   const isOver = (pct || 0) > 100;
-  const stemHeight = 6 + clamped * 0.5;
-  const leafCount = Math.floor(clamped / 20);
+  const atGoal = clamped >= 100;
+  const stemColor = isOver ? "#C1594A" : color;
+
+  // Container is h-32 (128px) — cap stem growth at ~112px so there's still
+  // a little headroom above it for the bloom/warning icon at 100%.
+  const maxStemHeight = 112;
+  const stemHeight = 4 + (clamped / 100) * (maxStemHeight - 4);
+  const leafCount = Math.floor(clamped / 20); // up to 5, one every 20%
+
   return (
     <div className="flex flex-col items-center gap-2 w-full">
       <div className="relative h-32 w-10 flex items-end justify-center">
-        <div className="w-1.5 rounded-full transition-all duration-700 ease-out" style={{ height: `${stemHeight}px`, backgroundColor: isOver ? "#C1594A" : color }} />
-        {Array.from({ length: leafCount }).map((_, i) => (
-          <div key={i} className="absolute transition-all duration-500"
-            style={{ bottom: `${12 + i * 20}px`, left: i % 2 === 0 ? "2px" : "auto", right: i % 2 !== 0 ? "2px" : "auto", transform: i % 2 === 0 ? "rotate(-25deg)" : "rotate(25deg) scaleX(-1)" }}>
-            <Leaf size={16} color={isOver ? "#C1594A" : color} fill={isOver ? "#C1594A" : color} fillOpacity={0.35} />
+        <div className="w-1.5 rounded-full transition-all duration-700 ease-out" style={{ height: `${stemHeight}px`, backgroundColor: stemColor }} />
+        {Array.from({ length: leafCount }).map((_, i) => {
+          // Spaced along the stem's *actual current height*, not fixed pixel offsets —
+          // this is what keeps leaves visually attached to the stem as it grows.
+          const leafBottom = ((i + 1) / (leafCount + 0.5)) * stemHeight;
+          return (
+            <div key={i} className="absolute transition-all duration-500"
+              style={{ bottom: `${leafBottom}px`, left: i % 2 === 0 ? "2px" : "auto", right: i % 2 !== 0 ? "2px" : "auto", transform: i % 2 === 0 ? "rotate(-25deg)" : "rotate(25deg) scaleX(-1)" }}>
+              <Leaf size={16} color={stemColor} fill={stemColor} fillOpacity={0.35} />
+            </div>
+          );
+        })}
+        {atGoal && (
+          <div className="absolute transition-all duration-500" style={{ bottom: `${stemHeight - 4}px` }}>
+            {isOver
+              ? <AlertTriangle size={18} color="#C1594A" fill="#C1594A" fillOpacity={0.2} />
+              : <Flower2 size={20} color={color} />}
           </div>
-        ))}
+        )}
       </div>
       <div className="text-center">
         <div className="text-xs font-medium tracking-wide" style={{ color: ink }}>{label}</div>
