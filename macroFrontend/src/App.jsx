@@ -173,6 +173,10 @@ const RESTAURANTS = {
       { id: "m8", name: "Sausage McMuffin w/ Egg", cal: 480, p: 21, c: 31, f: 31, period: "breakfast" },
       { id: "m9", name: "Hotcakes (3, no syrup/butter)", cal: 350, p: 8, c: 60, f: 8, period: "breakfast" },
       { id: "m10", name: "Hash Browns", cal: 150, p: 1, c: 15, f: 9, period: "breakfast" },
+      { id: "m11", name: "Filet-O-Fish", cal: 390, p: 16, c: 38, f: 19, period: "standard" },
+      { id: "m12", name: "McDouble", cal: 390, p: 22, c: 33, f: 19, period: "standard" },
+      { id: "m13", name: "Oreo McFlurry (small)", cal: 510, p: 12, c: 80, f: 16, period: "standard" },
+      { id: "m14", name: "Fruit & Yogurt Parfait", cal: 150, p: 4, c: 28, f: 2, period: "breakfast" },
     ],
   },
   chipotle: {
@@ -184,6 +188,8 @@ const RESTAURANTS = {
       { id: "c4", name: "Barbacoa Bowl w/ rice & beans", cal: 650, p: 40, c: 60, f: 24, period: "standard" },
       { id: "c5", name: "Chicken Salad w/ salsa (no dressing)", cal: 400, p: 40, c: 20, f: 18, period: "standard" },
       { id: "c6", name: "Chips (side)", cal: 540, p: 7, c: 65, f: 27, period: "standard" },
+      { id: "c7", name: "Sofritas Bowl (rice, black beans, salsas)", cal: 720, p: 22, c: 95, f: 25, period: "standard" },
+      { id: "c8", name: "Guacamole (side)", cal: 230, p: 2, c: 8, f: 22, period: "standard" },
     ],
   },
   tacobell: {
@@ -197,6 +203,10 @@ const RESTAURANTS = {
       { id: "t6", name: "Mexican Pizza", cal: 540, p: 20, c: 46, f: 30, period: "standard" },
       { id: "t7", name: "Breakfast Crunchwrap", cal: 610, p: 20, c: 53, f: 36, period: "breakfast" },
       { id: "t8", name: "Hash Brown", cal: 160, p: 1, c: 15, f: 10, period: "breakfast" },
+      { id: "t9", name: "Doritos Locos Taco", cal: 170, p: 7, c: 13, f: 10, period: "standard" },
+      { id: "t10", name: "Chicken Quesadilla", cal: 500, p: 26, c: 39, f: 27, period: "standard" },
+      { id: "t11", name: "Nacho Fries", cal: 320, p: 4, c: 33, f: 19, period: "standard" },
+      { id: "t12", name: "Black Bean Chalupa", cal: 330, p: 10, c: 39, f: 14, period: "standard" },
     ],
   },
 };
@@ -495,7 +505,7 @@ function Onboarding({ initial, onComplete, isDark, onToggleDark }) {
         <div className="rounded-3xl p-5 mb-5" style={{ backgroundColor: theme.primary }}>
           <p className="text-xs mb-1" style={{ color: theme.surface, opacity: 0.85 }}>Your daily target</p>
           <p className="font-display text-xl" style={{ color: theme.surface }}>
-            {preview.calories} cal · P{preview.protein} C{preview.carbs} F{preview.fat}
+            {preview.calories} cal · Protein {preview.protein}g · Carbs {preview.carbs}g · Fat {preview.fat}g
           </p>
         </div>
 
@@ -809,7 +819,8 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
                     style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
                     <div>
                       <h3 className="font-semibold text-sm" style={{ color: theme.ink }}>{item.name}</h3>
-                      <p className="text-xs mt-1" style={{ color: theme.muted }}>{item.cal} cal · P{item.p} C{item.c} F{item.f}</p>
+                      <p className="text-xs mt-1" style={{ color: theme.muted }}>{item.cal} cal</p>
+                      <p className="text-xs" style={{ color: theme.muted }}>Protein {item.p}g · Carbs {item.c}g · Fat {item.f}g</p>
                     </div>
                     <button onClick={() => addItem(item)} className="mt-3 flex items-center justify-center gap-1 rounded-xl py-2 text-sm font-medium transition-transform active:scale-95"
                       style={{ backgroundColor: theme.primary, color: theme.surface }}>
