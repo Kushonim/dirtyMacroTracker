@@ -212,27 +212,31 @@ const GENERIC_DEFAULT_PROFILE = { sex: "male", age: 30, heightIn: 68, weightLb: 
 /**
  * The signature visual element: a stem that grows and sprouts leaves as a
  * given macro (calories/protein/carbs/fat) approaches its daily target,
- * instead of a standard flat progress bar. Purely presentational — takes
- * a 0-100ish percentage and renders it.
+ * instead of a standard flat progress bar. Shows the actual current/target
+ * numbers underneath (not just a percentage) so it's clear exactly how
+ * much room is left — and flags in a warning color once you've gone over.
  */
-function PlantMeter({ pct, label, color, ink, muted }) {
+function PlantMeter({ pct, current, target, label, color, ink, muted }) {
   const clamped = Math.min(100, Math.max(0, pct || 0));
+  const isOver = (pct || 0) > 100;
   const stemHeight = 6 + clamped * 0.5;
   const leafCount = Math.floor(clamped / 20);
   return (
     <div className="flex flex-col items-center gap-2 w-full">
       <div className="relative h-32 w-10 flex items-end justify-center">
-        <div className="w-1.5 rounded-full transition-all duration-700 ease-out" style={{ height: `${stemHeight}px`, backgroundColor: color }} />
+        <div className="w-1.5 rounded-full transition-all duration-700 ease-out" style={{ height: `${stemHeight}px`, backgroundColor: isOver ? "#C1594A" : color }} />
         {Array.from({ length: leafCount }).map((_, i) => (
           <div key={i} className="absolute transition-all duration-500"
             style={{ bottom: `${12 + i * 20}px`, left: i % 2 === 0 ? "2px" : "auto", right: i % 2 !== 0 ? "2px" : "auto", transform: i % 2 === 0 ? "rotate(-25deg)" : "rotate(25deg) scaleX(-1)" }}>
-            <Leaf size={16} color={color} fill={color} fillOpacity={0.35} />
+            <Leaf size={16} color={isOver ? "#C1594A" : color} fill={isOver ? "#C1594A" : color} fillOpacity={0.35} />
           </div>
         ))}
       </div>
       <div className="text-center">
         <div className="text-xs font-medium tracking-wide" style={{ color: ink }}>{label}</div>
-        <div className="text-[11px]" style={{ color: muted }}>{Math.round(clamped)}%</div>
+        <div className="text-[11px] font-medium" style={{ color: isOver ? "#C1594A" : muted }}>
+          {Math.round(current)}/{Math.round(target)}
+        </div>
       </div>
     </div>
   );
@@ -795,10 +799,10 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
             <Sparkles size={18} color={theme.accent} /> Today's growth
           </h2>
           <div className="grid grid-cols-4 gap-2 mb-6">
-            <PlantMeter pct={(totals.cal / targets.calories) * 100} label="Cal" color={theme.accent} ink={theme.ink} muted={theme.muted} />
-            <PlantMeter pct={(totals.p / targets.protein) * 100} label="Protein" color={theme.primary} ink={theme.ink} muted={theme.muted} />
-            <PlantMeter pct={(totals.c / targets.carbs) * 100} label="Carbs" color="#B98D5E" ink={theme.ink} muted={theme.muted} />
-            <PlantMeter pct={(totals.f / targets.fat) * 100} label="Fat" color="#E8B4A0" ink={theme.ink} muted={theme.muted} />
+            <PlantMeter pct={(totals.cal / targets.calories) * 100} current={totals.cal} target={targets.calories} label="Cal" color={theme.accent} ink={theme.ink} muted={theme.muted} />
+            <PlantMeter pct={(totals.p / targets.protein) * 100} current={totals.p} target={targets.protein} label="Protein" color={theme.primary} ink={theme.ink} muted={theme.muted} />
+            <PlantMeter pct={(totals.c / targets.carbs) * 100} current={totals.c} target={targets.carbs} label="Carbs" color="#B98D5E" ink={theme.ink} muted={theme.muted} />
+            <PlantMeter pct={(totals.f / targets.fat) * 100} current={totals.f} target={targets.fat} label="Fat" color="#E8B4A0" ink={theme.ink} muted={theme.muted} />
           </div>
           <div className="space-y-2 mb-4">
             {cart.length === 0 && <p className="text-xs italic" style={{ color: theme.muted }}>Nothing added yet — pick something that sounds good.</p>}
