@@ -46,19 +46,26 @@ function requireAuth(req, res, next) {
 // POST /api/auth/register — create an account, return a ready-to-use token
 // so the frontend doesn't need a separate login call right after signing up.
 router.post("/register", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required" });
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: "Username, email, and password are required" });
   }
   try {
-    const existing = await pool.query("SELECT id FROM users WHERE username = $1", [username]);
+    const existing = await pool.query(
+      "SELECT username, email FROM users WHERE username = $1 OR email = $2",
+      [username, email]
+    );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: "Username already taken" });
+      const conflict = existing.rows[0];
+      if (conflict.username === username) {
+        return res.status(409).json({ error: "That username is already taken" });
+      }
+      return res.status(409).json({ error: "An account with that email already exists" });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username",
-      [username, passwordHash]
+      "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email",
+      [username, email, passwordHash]
     );
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });

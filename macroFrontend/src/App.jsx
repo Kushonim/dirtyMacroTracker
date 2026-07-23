@@ -217,13 +217,13 @@ const GENERIC_DEFAULT_PROFILE = { sex: "male", age: 30, heightIn: 68, weightLb: 
  * empty space above it), and leaves are spaced proportionally along the
  * *current* stem height so they always sit on visible stem rather than
  * floating at fixed spots disconnected from the actual growth. A flower
- * blooms at the top once the goal is exactly hit; going over swaps that
- * for a warning icon and tints the whole plant red.
+ * blooms at the top once the goal is nearly or fully hit (90%+); going
+ * over swaps that for a warning icon and tints the whole plant red.
  */
 function PlantMeter({ pct, current, target, label, color, ink, muted }) {
   const clamped = Math.min(100, Math.max(0, pct || 0));
   const isOver = (pct || 0) > 100;
-  const atGoal = clamped >= 100;
+  const atGoal = clamped >= 90; // blooms a bit before hitting exactly 100%, not just right at it
   const stemColor = isOver ? "#C1594A" : color;
 
   // Container is h-32 (128px) — cap stem growth at ~112px so there's still
@@ -269,6 +269,7 @@ function PlantMeter({ pct, current, target, label, color, ink, muted }) {
 function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState(""); // only collected/used on signup, not login
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -279,7 +280,7 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
     setError("");
     setLoading(true);
     try {
-      const data = mode === "login" ? await login(username, password) : await register(username, password);
+      const data = mode === "login" ? await login(username, password) : await register(username, email, password);
       onAuthed(data.token);
     } catch (err) {
       setError(err.message);
@@ -341,6 +342,10 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
           <form onSubmit={submit} className="space-y-3">
             <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+            {mode === "signup" && (
+              <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                className="w-full rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+            )}
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
             {error && <p className="text-xs" style={{ color: "#B9705E" }}>{error}</p>}
