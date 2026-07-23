@@ -17,7 +17,23 @@ const app = express();
 
 // Locked to the deployed frontend's origin rather than left wide open —
 // a browser sitting on any other domain can't call this API directly.
-app.use(cors({ origin: "https://dirty-macro-tracker-git-main-kushonim1.vercel.app" }));
+// Locked to a known list of the deployed frontend's domains — Vercel gives a
+// project both a stable production domain and one tied to the git branch,
+// and either can be the one a visitor actually lands on.
+const ALLOWED_ORIGINS = [
+  "https://dirty-macro-tracker.vercel.app",
+  "https://dirty-macro-tracker-git-main-kushonim1.vercel.app",
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // `origin` is undefined for non-browser requests (e.g. curl, Postman) — allow those through.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+}));
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
