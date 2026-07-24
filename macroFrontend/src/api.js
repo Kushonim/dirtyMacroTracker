@@ -53,6 +53,20 @@ export async function updateProfile(token, profile) {
   return data;
 }
 
+export async function changePassword(token, currentPassword, newPassword) {
+  const res = await fetch(`${API_BASE}/auth/password`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not change password");
+  return data;
+}
+
 // Public endpoint — no auth header, since guests can submit requests too.
 export async function submitRequest({ request_type, restaurant_name, item_name, note }) {
   const res = await fetch(`${API_BASE}/requests`, {

@@ -333,11 +333,70 @@ function PlantMeter({ pct, current, target, label, color, ink, muted }) {
 }
 
 // ---------- Screen 1: Auth (login / signup / guest skip) ----------
+// ---------- Screen 0: Welcome (brief intro before asking for an account) ----------
+// Shown once per fresh visit to new/logged-out visitors — returning users
+// with a valid saved token skip straight past this (see the mount effect
+// in the top-level App component below).
+function WelcomeScreen({ onGetStarted, onSkip, isDark, onToggleDark }) {
+  const theme = resolveTheme("standard", isDark);
+  const highlights = [
+    "Personalized calorie & macro targets — not the same fixed number for everyone",
+    "Standard and Breakfast menus that actually match what each chain serves",
+    "Bulk, Cut, Maintain, Dirty Bulk, or Keto — items that fit your goal get highlighted",
+  ];
+
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center relative" style={{ backgroundColor: theme.bg, fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
+        .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
+        button:not(:disabled), .clickable { transition: filter 0.15s ease, transform 0.1s ease; }
+        button:not(:disabled):hover, .clickable:hover { filter: brightness(1.08); }
+        button:not(:disabled):active { transform: scale(0.96); }
+      `}</style>
+      <div className="absolute top-6 right-6">
+        <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
+      </div>
+
+      <div className="w-full max-w-md px-6 text-center">
+        <div className="flex justify-center mb-5">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: theme.primary }}>
+            <Leaf size={26} color={theme.surface} />
+          </div>
+        </div>
+        <h1 className="font-display text-3xl mb-2" style={{ color: theme.ink }}>Macro Loadout</h1>
+        <p className="text-sm mb-8" style={{ color: theme.muted }}>
+          Hit your macros with the fast food you're already ordering.
+        </p>
+
+        <div className="rounded-3xl p-5 mb-6 text-left" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
+          {highlights.map((h, i) => (
+            <div key={i} className={`flex items-start gap-2 text-sm ${i > 0 ? "mt-3" : ""}`} style={{ color: theme.ink }}>
+              <Sparkles size={14} color={theme.accent} className="mt-0.5 flex-shrink-0" />
+              <span>{h}</span>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={onGetStarted}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 font-medium transition-transform active:scale-95"
+          style={{ backgroundColor: theme.ink, color: theme.surface }}>
+          Get started <ArrowRight size={16} />
+        </button>
+        <button onClick={onSkip} className="w-full text-center text-xs mt-4 underline" style={{ color: theme.muted }}>
+          Skip for now — use general numbers
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState(""); // only collected/used on signup, not login
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const theme = resolveTheme("standard", isDark);
@@ -348,7 +407,7 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
     setLoading(true);
     try {
       const data = mode === "login" ? await login(username, password) : await register(username, email, password);
-      onAuthed(data.token);
+      onAuthed(data.token, rememberMe);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -422,6 +481,10 @@ function AuthScreen({ onAuthed, onSkip, isDark, onToggleDark }) {
             )}
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: theme.bg, color: theme.ink, border: `1px solid ${theme.border}` }} />
+            <label className="flex items-center gap-2 text-xs" style={{ color: theme.muted }}>
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="clickable" />
+              Stay signed in on this device
+            </label>
             {error && <p className="text-xs" style={{ color: "#B9705E" }}>{error}</p>}
             <button type="submit" disabled={loading}
               className="w-full rounded-2xl py-3 font-medium transition-transform active:scale-95"
@@ -1206,7 +1269,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
 // bubbles results back up through the callbacks passed in here).
 export default function App() {
   const [screen, setScreen] = useState("loading"); // 'loading' | 'auth' | 'onboarding' | 'app'
-  const [token, setToken] = useState(() => localStorage.getItem("token") || null);
+  const [token, setToken] = useState(() => localStorage.getItem("token") || sessionStorage.getItem("token") || null);
   const [profile, setProfile] = useState(null);
   const [goalKey, setGoalKey] = useState("bulk");
   const [isGuest, setIsGuest] = useState(false);
@@ -1237,7 +1300,7 @@ export default function App() {
   // the account exists but never finished onboarding (e.g. signed up, then
   // closed the tab) — send them there instead of assuming default stats.
   useEffect(() => {
-    if (!token) { setScreen("auth"); return; }
+    if (!token) { setScreen("welcome"); return; }
     getProfile(token)
       .then((data) => {
         setUsername(data.username);
@@ -1255,16 +1318,25 @@ export default function App() {
         }
       })
       .catch(() => {
-        // Token expired or invalid — clear it and fall back to a fresh login
-        // rather than getting stuck on a broken "logged in" state.
+        // Token expired or invalid — clear it (from both possible storages)
+        // and fall back to a fresh login rather than getting stuck on a
+        // broken "logged in" state.
         localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
         setToken(null);
         setScreen("auth");
       });
   }, [token]);
 
-  const handleAuthed = (newToken) => {
-    localStorage.setItem("token", newToken);
+  // "Stay signed in" -> localStorage (survives closing the browser).
+  // Unchecked -> sessionStorage (cleared once the browser/tab is closed),
+  // so someone on a shared or public computer isn't left logged in.
+  const handleAuthed = (newToken, rememberMe) => {
+    if (rememberMe) {
+      localStorage.setItem("token", newToken);
+    } else {
+      sessionStorage.setItem("token", newToken);
+    }
     setToken(newToken);
   };
 
@@ -1294,6 +1366,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     setToken(null);
     setProfile(null);
     setIsGuest(false);
@@ -1314,6 +1387,7 @@ export default function App() {
   };
 
   if (screen === "loading") return null;
+  if (screen === "welcome") return <WelcomeScreen onGetStarted={() => setScreen("auth")} onSkip={handleSkip} isDark={isDark} onToggleDark={toggleDark} />;
   if (screen === "auth") return <AuthScreen onAuthed={handleAuthed} onSkip={handleSkip} isDark={isDark} onToggleDark={toggleDark} />;
   if (screen === "onboarding") return <Onboarding initial={{ profile, goalKey }} onComplete={handleOnboardingComplete} isDark={isDark} onToggleDark={toggleDark} />;
   return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} username={username} token={token} />;

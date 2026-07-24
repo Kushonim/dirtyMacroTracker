@@ -137,4 +137,28 @@ router.put("/profile", requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/auth/password — requires the current password, not just the new
+// one, so someone can't change a password just by having a stolen/leftover
+// login token without also knowing the account's actual current password.
+router.put("/password", requireAuth, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: "Current and new password are both required" });
+  }
+  try {
+    const result = await pool.query("SELECT password_hash FROM users WHERE id = $1", [req.userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+
+    const newHash = await bcrypt.hash(new_password, 10);
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [newHash, req.userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Something went wrong changing the password" });
+  }
+});
+
 module.exports = { router, requireAuth };
