@@ -76,3 +76,44 @@ export async function submitBugReport({ description, contact_info }) {
   if (!res.ok) throw new Error(data.error || "Could not submit bug report");
   return data;
 }
+
+// Loadout history — requires auth; guests never persist their loadout.
+export async function getLoadoutDates(token) {
+  const res = await fetch(`${API_BASE}/loadouts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not load history");
+  return data; // [{ date, totalCal }]
+}
+
+export async function getLoadoutForDate(token, date) {
+  const res = await fetch(`${API_BASE}/loadouts/${date}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null; // no saved loadout for this day yet
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not load that day");
+  return data; // { loadout_date, goal_type, items }
+}
+
+export async function saveLoadoutForDate(token, date, { items, goal_type }) {
+  const res = await fetch(`${API_BASE}/loadouts/${date}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ items, goal_type }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not save loadout");
+  return data;
+}
+
+export async function deleteLoadoutForDate(token, date) {
+  const res = await fetch(`${API_BASE}/loadouts/${date}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not delete that day's loadout");
+  return data;
+}

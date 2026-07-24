@@ -18,8 +18,25 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Flame, Leaf, Plus, Minus, Trash2, Sparkles, Sunrise, ArrowRight,
   Pencil, LogOut, Moon, Sun, MessageSquarePlus, X, Bug, Flower2, AlertTriangle,
+  Calendar, ChevronLeft, ChevronRight, Save,
 } from "lucide-react";
-import { login, register, getProfile, updateProfile, submitRequest, submitBugReport } from "./api";
+import {
+  login, register, getProfile, updateProfile, submitRequest, submitBugReport,
+  getLoadoutDates, getLoadoutForDate, saveLoadoutForDate, deleteLoadoutForDate,
+} from "./api";
+
+/**
+ * Builds a "YYYY-MM-DD" key from the user's *local* time, not UTC.
+ * Date.toISOString() would convert to UTC first, which can silently shift
+ * a late-night loadout onto the wrong calendar day depending on the user's
+ * timezone — this avoids that by reading the local year/month/day directly.
+ */
+function localDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 // ---------- Click sound ----------
 // Four real wood-block recordings, one picked at random per click for
@@ -739,13 +756,139 @@ function BugReportModal({ onClose, theme }) {
   );
 }
 
+/** Small ticking local date/time display shown in the main app header. */
+function LiveClock({ theme }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="text-xs text-right leading-tight" style={{ color: theme.muted }}>
+      <div>{now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>
+      <div>{now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" })}</div>
+    </div>
+  );
+}
+
+/**
+ * Month-grid calendar for browsing loadout history. Fetches the lightweight
+ * date-list (date + total calories) once on open rather than every day's
+ * full item list — clicking a specific day is what triggers fetching that
+ * day's full items (handled by the parent via onSelectDate).
+ */
+function CalendarModal({ theme, token, currentDateKey, onSelectDate, onClose }) {
+  const [monthCursor, setMonthCursor] = useState(() => {
+    const [y, m] = currentDateKey.split("-").map(Number);
+    return new Date(y, m - 1, 1);
+  });
+  const [markedDates, setMarkedDates] = useState({}); // { 'YYYY-MM-DD': totalCal }
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getLoadoutDates(token)
+      .then((rows) => {
+        const map = {};
+        rows.forEach((r) => { map[r.date] = r.totalCal; });
+        setMarkedDates(map);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const year = monthCursor.getFullYear();
+  const month = monthCursor.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = localDateKey(new Date());
+
+  const cells = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+      <div className="w-full max-w-sm rounded-3xl p-6 relative" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
+        <button onClick={onClose} className="absolute top-4 right-4">
+          <X size={18} color={theme.muted} />
+        </button>
+
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => setMonthCursor(new Date(year, month - 1, 1))}>
+            <ChevronLeft size={18} color={theme.muted} />
+          </button>
+          <h3 className="font-display text-lg" style={{ color: theme.ink }}>
+            {monthCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          </h3>
+          <button onClick={() => setMonthCursor(new Date(year, month + 1, 1))}>
+            <ChevronRight size={18} color={theme.muted} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+            <div key={i} className="text-[10px]" style={{ color: theme.muted }}>{d}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((day, i) => {
+            if (day === null) return <div key={i} />;
+            const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const hasData = markedDates[key] != null;
+            const isToday = key === todayKey;
+            const isViewing = key === currentDateKey;
+            return (
+              <button
+                key={i}
+                onClick={() => onSelectDate(key)}
+                className="aspect-square rounded-lg flex flex-col items-center justify-center text-xs relative"
+                style={{
+                  backgroundColor: isViewing ? theme.primary : "transparent",
+                  color: isViewing ? theme.surface : theme.ink,
+                  border: isToday && !isViewing ? `1px solid ${theme.accent}` : "1px solid transparent",
+                }}
+              >
+                {day}
+                {hasData && (
+                  <span className="absolute bottom-1 w-1 h-1 rounded-full" style={{ backgroundColor: isViewing ? theme.surface : theme.accent }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {loading && <p className="text-xs mt-3 text-center" style={{ color: theme.muted }}>Loading history...</p>}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Screen 3: Main app (restaurant browser + macro tracker) ----------
-function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark, username }) {
+function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, onToggleDark, username, token }) {
   const [chainKey, setChainKey] = useState("mcdonalds");
   const [mode, setMode] = useState("standard"); // 'standard' | 'breakfast' — drives both theme and visible menu items
   const [cart, setCart] = useState([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showBugModal, setShowBugModal] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [viewingDateKey, setViewingDateKey] = useState(() => localDateKey(new Date()));
+  const [saveStatus, setSaveStatus] = useState("idle"); // 'idle' | 'saving' | 'saved' | 'error'
+  const todayKey = localDateKey(new Date());
+  const isViewingToday = viewingDateKey === todayKey;
+
+  // On first load, restore today's saved loadout (if any) so refreshing the
+  // page doesn't lose progress. Guests never persist, so this is skipped
+  // for them — their cart only ever lives in this component's state.
+  useEffect(() => {
+    if (isGuest || !token) return;
+    getLoadoutForDate(token, todayKey)
+      .then((data) => {
+        if (data && data.items) setCart(data.items);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const targets = computeTargets(profile, goalKey);
   const chain = RESTAURANTS[chainKey];
@@ -767,6 +910,53 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
   };
   const changeQty = (id, delta) => {
     setCart((prev) => prev.map((c) => (c.id === id ? { ...c, qty: c.qty + delta } : c)).filter((c) => c.qty > 0));
+  };
+
+  // Explicit save rather than autosave-on-every-change — predictable, and
+  // avoids firing a network request on every single quantity click.
+  const handleSaveLoadout = async () => {
+    if (isGuest || !token) return;
+    setSaveStatus("saving");
+    try {
+      await saveLoadoutForDate(token, viewingDateKey, { items: cart, goal_type: goalKey });
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (err) {
+      setSaveStatus("error");
+    }
+  };
+
+  const handleSelectDate = async (dateKey) => {
+    setShowCalendar(false);
+    setViewingDateKey(dateKey);
+    if (isGuest || !token) return;
+    try {
+      const data = await getLoadoutForDate(token, dateKey);
+      setCart(data && data.items ? data.items : []);
+    } catch (err) {
+      setCart([]);
+    }
+  };
+
+  const handleBackToToday = async () => {
+    setViewingDateKey(todayKey);
+    if (isGuest || !token) return;
+    try {
+      const data = await getLoadoutForDate(token, todayKey);
+      setCart(data && data.items ? data.items : []);
+    } catch (err) {
+      setCart([]);
+    }
+  };
+
+  const handleDeleteViewedDay = async () => {
+    if (isGuest || !token) return;
+    try {
+      await deleteLoadoutForDate(token, viewingDateKey);
+      setCart([]);
+    } catch (err) {
+      // best-effort — leave the cart as-is if the delete fails
+    }
   };
   // Running totals across whatever's currently in the cart, recalculated
   // only when the cart itself changes.
@@ -828,6 +1018,12 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
         </div>
 
         <div className="flex items-center gap-3">
+          <LiveClock theme={theme} />
+          {!isGuest && (
+            <button onClick={() => setShowCalendar(true)} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
+              <Calendar size={12} /> History
+            </button>
+          )}
           {/* Guests see "Sign up" (routes to AuthScreen) instead of "Edit profile"
               (routes to Onboarding) — see handleEditProfile below for the branch. */}
           <button onClick={onEditProfile} className="flex items-center gap-1 text-xs" style={{ color: theme.muted }}>
@@ -851,6 +1047,16 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
           <DarkModeToggle isDark={isDark} onToggle={onToggleDark} theme={theme} />
         </div>
       </header>
+
+      {!isGuest && !isViewingToday && (
+        <div className="max-w-5xl mx-auto px-6 -mt-3 mb-3">
+          <div className="rounded-xl px-4 py-2 flex items-center justify-between text-xs" style={{ backgroundColor: theme.accent, color: theme.ink }}>
+            <span>Viewing {viewingDateKey} — this is a past day, not today's live loadout.</span>
+            <button onClick={handleBackToToday} className="underline font-medium">Back to today</button>
+          </div>
+        </div>
+      )}
+
 
       <main className="max-w-5xl mx-auto px-6 pb-16 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <section className="lg:col-span-2 space-y-6">
@@ -944,15 +1150,41 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
               <Trash2 size={12} /> Clear loadout
             </button>
           )}
+
+          {!isGuest && (
+            <div className="flex items-center gap-3 mt-3">
+              <button onClick={handleSaveLoadout} disabled={saveStatus === "saving"}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
+                style={{ backgroundColor: theme.primary, color: theme.surface, opacity: saveStatus === "saving" ? 0.6 : 1 }}>
+                <Save size={12} />
+                {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved!" : saveStatus === "error" ? "Try again" : `Save ${isViewingToday ? "today's" : "this"} loadout`}
+              </button>
+              {!isViewingToday && (
+                <button onClick={handleDeleteViewedDay} className="flex items-center gap-1 text-xs" style={{ color: "#B9705E" }}>
+                  <Trash2 size={12} /> Delete this day
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 pt-4 flex items-center gap-2 text-xs transition-colors duration-500" style={{ borderTop: `1px solid ${theme.border}`, color: theme.muted }}>
             <Flame size={14} color={theme.accent} />
-            {totals.cal} / {targets.calories} cal today
+            {totals.cal} / {targets.calories} cal {isViewingToday ? "today" : `on ${viewingDateKey}`}
           </div>
         </aside>
       </main>
 
       {showRequestModal && <RequestModal theme={theme} onClose={() => setShowRequestModal(false)} />}
       {showBugModal && <BugReportModal theme={theme} onClose={() => setShowBugModal(false)} />}
+      {showCalendar && (
+        <CalendarModal
+          theme={theme}
+          token={token}
+          currentDateKey={viewingDateKey}
+          onSelectDate={handleSelectDate}
+          onClose={() => setShowCalendar(false)}
+        />
+      )}
 
       <button
         onClick={() => setShowBugModal(true)}
@@ -1084,5 +1316,5 @@ export default function App() {
   if (screen === "loading") return null;
   if (screen === "auth") return <AuthScreen onAuthed={handleAuthed} onSkip={handleSkip} isDark={isDark} onToggleDark={toggleDark} />;
   if (screen === "onboarding") return <Onboarding initial={{ profile, goalKey }} onComplete={handleOnboardingComplete} isDark={isDark} onToggleDark={toggleDark} />;
-  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} username={username} />;
+  return <MacroApp profile={profile} goalKey={goalKey} onEditProfile={handleEditProfile} onLogout={handleLogout} isGuest={isGuest} isDark={isDark} onToggleDark={toggleDark} username={username} token={token} />;
 }
