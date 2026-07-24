@@ -38,6 +38,23 @@ function localDateKey(date) {
   return `${y}-${m}-${d}`;
 }
 
+// Time-of-day bands (based on the browser's local hour) used to vary the
+// header greeting — a small personality touch rather than a static "Hello".
+const GREETING_BANDS = [
+  { start: 0, end: 4, text: (name) => `Late night snack, ${name}?` },
+  { start: 4, end: 11, text: (name) => `Morning, ${name} — what's for breakfast?` },
+  { start: 11, end: 15, text: (name) => `Hey ${name} — what's for lunch?` },
+  { start: 15, end: 18, text: (name) => `Afternoon, ${name} — snack time?` },
+  { start: 18, end: 22, text: (name) => `Evening, ${name} — what's for dinner?` },
+  { start: 22, end: 24, text: (name) => `Up late, ${name}? Midnight snack o'clock.` },
+];
+
+function getGreeting(username) {
+  const hour = new Date().getHours();
+  const band = GREETING_BANDS.find((b) => hour >= b.start && hour < b.end);
+  return band ? band.text(username) : `Hello, ${username}`;
+}
+
 // ---------- Click sound ----------
 // Four real wood-block recordings, one picked at random per click for
 // natural variation instead of the same exact sound every time.
@@ -266,11 +283,41 @@ const RESTAURANTS = {
       { id: "t13", name: "Power Bowl, no rice/beans (protein style)", cal: 300, p: 25, c: 10, f: 18, period: "standard" },
     ],
   },
+  wendys: {
+    name: "Wendy's",
+    items: [
+      { id: "w1", name: "Dave's Single", cal: 580, p: 29, c: 35, f: 36, period: "standard" },
+      { id: "w2", name: "Baconator", cal: 960, p: 58, c: 41, f: 66, period: "standard" },
+      { id: "w3", name: "Spicy Chicken Sandwich", cal: 490, p: 29, c: 50, f: 21, period: "standard" },
+      { id: "w4", name: "Grilled Chicken Sandwich", cal: 337, p: 26, c: 36, f: 8, period: "standard" },
+      { id: "w5", name: "Jr. Bacon Cheeseburger", cal: 390, p: 19, c: 27, f: 24, period: "standard" },
+      { id: "w6", name: "Small Chili", cal: 250, p: 16, c: 23, f: 9, period: "standard" },
+      { id: "w7", name: "Baked Potato (plain)", cal: 270, p: 6, c: 61, f: 0, period: "standard" },
+      { id: "w8", name: "Small Chocolate Frosty", cal: 200, p: 5, c: 33, f: 5, period: "standard" },
+      { id: "w9", name: "Breakfast Baconator", cal: 730, p: 35, c: 46, f: 47, period: "breakfast" },
+      { id: "w10", name: "Maple Bacon Chicken Croissant", cal: 550, p: 25, c: 45, f: 30, period: "breakfast" },
+    ],
+  },
+  chickfila: {
+    name: "Chick-fil-A",
+    items: [
+      { id: "cfa1", name: "Chick-fil-A Chicken Sandwich (classic)", cal: 440, p: 28, c: 41, f: 19, period: "standard" },
+      { id: "cfa2", name: "Spicy Chicken Sandwich", cal: 450, p: 28, c: 43, f: 20, period: "standard" },
+      { id: "cfa3", name: "Grilled Chicken Sandwich", cal: 390, p: 28, c: 41, f: 12, period: "standard" },
+      { id: "cfa4", name: "8-count Chicken Nuggets", cal: 250, p: 27, c: 11, f: 12, period: "standard" },
+      { id: "cfa5", name: "12-count Grilled Nuggets", cal: 200, p: 38, c: 2, f: 4, period: "standard" },
+      { id: "cfa6", name: "Waffle Fries (medium)", cal: 420, p: 5, c: 45, f: 24, period: "standard" },
+      { id: "cfa7", name: "Cool Wrap, no dressing", cal: 350, p: 42, c: 29, f: 13, period: "standard" },
+      { id: "cfa8", name: "Market Salad w/ Grilled Chicken", cal: 320, p: 28, c: 26, f: 12, period: "standard" },
+      { id: "cfa9", name: "Egg White Grill", cal: 300, p: 27, c: 29, f: 8, period: "breakfast" },
+      { id: "cfa10", name: "Hash Brown Scramble Burrito w/ Grilled Filet", cal: 650, p: 36, c: 46, f: 36, period: "breakfast" },
+    ],
+  },
 };
 
 // Shown as disabled, dashed "Soon" buttons in the main app — signals
 // planned scope to a reviewer rather than looking like a missing feature.
-const WIP_CHAINS = ["Wendy's", "Chick-fil-A", "Subway"];
+const WIP_CHAINS = ["Subway"];
 
 // Used for "Skip for now" guest mode — a reasonable average adult so the
 // app is immediately usable without any signup friction.
@@ -937,8 +984,16 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
   const [showCalendar, setShowCalendar] = useState(false);
   const [viewingDateKey, setViewingDateKey] = useState(() => localDateKey(new Date()));
   const [saveStatus, setSaveStatus] = useState("idle"); // 'idle' | 'saving' | 'saved' | 'error'
+  const [, forceGreetingRefresh] = useState(0);
   const todayKey = localDateKey(new Date());
   const isViewingToday = viewingDateKey === todayKey;
+
+  // Refreshes the time-of-day greeting every few minutes, in case someone
+  // leaves the tab open across a band boundary (e.g. lunch -> afternoon).
+  useEffect(() => {
+    const id = setInterval(() => forceGreetingRefresh((n) => n + 1), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // On first load, restore today's saved loadout (if any) so refreshing the
   // page doesn't lose progress. Guests never persist, so this is skipped
@@ -1069,7 +1124,7 @@ function MacroApp({ profile, goalKey, onEditProfile, onLogout, isGuest, isDark, 
           </div>
           <div>
             {!isGuest && username && (
-              <p className="text-xs mb-0.5" style={{ color: theme.muted }}>Hello, {username}</p>
+              <p className="text-xs mb-0.5" style={{ color: theme.muted }}>{getGreeting(username)}</p>
             )}
             <h1 className="font-display text-2xl transition-colors duration-500" style={{ color: theme.ink }}>
               {mode === "breakfast" ? "Rise & Shine" : "Macro Loadout"}
